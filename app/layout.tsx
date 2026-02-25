@@ -1,16 +1,21 @@
-import AuthProvider from "@/utils/AuthProvider";
-import type { Metadata } from "next";
+import AuthProvider from "@/app/utils/AuthProvider";
+import "./globals.css";
+
+export const metadata = {
+  title: "Amara Beauty Parlour",
+  description: "Premium beauty & wellness at your doorstep",
+};
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <AuthProvider>
-      <html>
-        <body>{children}</body>
-      </html>
-    </AuthProvider>
+    <html lang="en">
+      <body suppressHydrationWarning>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
+    </html>
   );
 }
