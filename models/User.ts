@@ -7,14 +7,18 @@ const UserSchema = new Schema(
       unique: [true, "Email already exists"],
       required: [true, "Email is required"],
     },
-    username: {
+    name: {
       type: String,
       required: [true, "Username is required"],
     },
-    userType: {
+    role: {
         type: String,
         enum: ["user", "admin", "service_provider"],
         default: "user",
+    },
+    logintype: {
+        type: String,
+        required: true
     }
   },
   {

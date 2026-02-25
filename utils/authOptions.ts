@@ -57,9 +57,8 @@ export const authOptions: NextAuthOptions = {
           await User.create({
             email: user.email,
             name: user.name,
-            image: user.image,
-            role: "client",         // default role for Google users
-            provider: "google",
+            role: "user",         // default role for Google users
+            logintype: "google",
           });
         }
       }
