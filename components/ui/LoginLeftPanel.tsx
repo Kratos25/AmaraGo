@@ -315,12 +315,12 @@ export function LoginLeftPanel() {
               </p>
               <h1 className="display-font text-white font-semibold tracking-tight"
                 style={{ fontSize: "clamp(2rem, 3.5vw, 2.8rem)", lineHeight: 1.1 }}>
-                Amara Beauty
+                AmaraGo
               </h1>
-              <p className="display-font text-white/80 italic font-light"
+              {/* <p className="display-font text-white/80 italic font-light"
                 style={{ fontSize: "clamp(1.1rem, 2vw, 1.5rem)" }}>
                 Parlour
-              </p>
+              </p> */}
             </div>
           </div>
 

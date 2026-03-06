@@ -1,96 +1,126 @@
-import GoogleProvider from "next-auth/providers/google";
-import CredentialsProvider from "next-auth/providers/credentials";
-import connectDB from "@/config/database";
-import User from "@/models/User";
-import bcrypt from "bcryptjs";
-import { NextAuthOptions } from "next-auth";
+// // import { NextAuthOptions } from 'next-auth';
+// // import GoogleProvider from 'next-auth/providers/google';
+// // import CredentialsProvider from 'next-auth/providers/credentials';
+// // import { FirestoreAdapter } from '@next-auth/firebase-adapter';
+// // import { cert } from 'firebase-admin/app';
+// // import { adminDb } from '@/lib/firebaseAdmin';
+// // import { signInWithEmailAndPassword } from 'firebase/auth';
+// // import { auth } from '@/lib/firebase';
+// // import { doc, getDoc } from 'firebase/firestore';
+// // import { db } from '@/lib/firebase';
 
-export const authOptions: NextAuthOptions = {
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        email: {},
-        password: {},
-      },
-      async authorize(credentials) {
-        try {
-          await connectDB();
-          console.log('DB connected');
+// // export const authOptions: NextAuthOptions = {
+// //   adapter: FirestoreAdapter({
+// //     credential: cert({
+// //       projectId:   process.env.FIREBASE_PROJECT_ID!,
+// //       clientEmail: process.env.FIREBASE_CLIENT_EMAIL!,
+// //       privateKey:  process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+// //     }),
+// //   }),
 
-          const user = await User.findOne({ email: credentials?.email });
-          console.log('User found:', user ? user.email : 'NOT FOUND');
+// //   providers: [
+// //     GoogleProvider({
+// //       clientId:     process.env.GOOGLE_CLIENT_ID!,
+// //       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+// //     }),
 
-          if (!user) return null;
+// //     CredentialsProvider({
+// //       name: 'Credentials',
+// //       credentials: {
+// //         email:    {},
+// //         password: {},
+// //       },
+// //       async authorize(credentials) {
+// //         try {
+// //           // Firebase Auth handles password verification
+// //           const userCredential = await signInWithEmailAndPassword(
+// //             auth,
+// //             credentials!.email,
+// //             credentials!.password
+// //           );
+// //           const firebaseUser = userCredential.user;
 
-          const isValid = await bcrypt.compare(credentials!.password, user.password);
-          console.log('Password valid:', isValid);
+// //           // Get role from Firestore
+// //           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+// //           const role = userDoc.data()?.role ?? 'client';
 
-          if (!isValid) return null;
+// //           return {
+// //             id:    firebaseUser.uid,
+// //             email: firebaseUser.email!,
+// //             name:  firebaseUser.displayName ?? '',
+// //             role, 
+// //           };
+// //         } catch {
+// //           return null;
+// //         }
+// //       },
+// //     }),
+// //   ],
 
-          return {
-            id: user._id.toString(),
-            email: user.email,
-            role: user.role,
-          };
-        } catch (err) {
-          console.error('Auth error:', err);
-          return null;
-        }
-      },
-    }),
-  ],
+// //   session: { strategy: 'jwt' as const },
 
-  session: { strategy: "jwt" as const },
+// //   callbacks: {
+// //     async jwt({ token, user }) {
+// //       if (user) {
+// //         token.role = (user as any).role;
+// //         token.id   = user.id;
+// //       }
+// //       return token;
+// //     },
+// //     async session({ session, token }) {
+// //       if (session.user) {
+// //         session.user.role = token.role as string;
+// //         session.user.id   = token.id   as string;
+// //       }
+// //       return session;
+// //     },
+// //   },
 
-  callbacks: {
-    async signIn({ user, account }) {
-      // Auto-create user in DB on first Google sign in
-      if (account?.provider === "google") {
-        await connectDB();
-        const existing = await User.findOne({ email: user.email });
-        if (!existing) {
-          await User.create({
-            email: user.email,
-            name: user.name,
-            role: "user",         // default role for Google users
-            logintype: "google",
-          });
-        }
-      }
-      return true;
-    },
+// //   pages: { signIn: '/login' },
+// //   secret: process.env.NEXTAUTH_SECRET,
+// // };
 
-    async jwt({ token, user }) {
-      if (user) {
-        token.role = user.role;
-        token.id = user.id;
-      }
-      // Fetch role from DB on every token refresh for Google users
-      if (!token.role) {
-        await connectDB();
-        const dbUser = await User.findOne({ email: token.email });
-        if (dbUser) token.role = dbUser.role;
-      }
-      return token;
-    },
 
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.role = token.role;
-        session.user.id = token.id as string;
-      }
-      return session;
-    },
-  },
+// import { NextAuthOptions } from "next-auth";
+// import GoogleProvider from "next-auth/providers/google";
+// import { db } from "@/lib/firebaseAdmin";
 
-  pages: {
-    signIn: "/login",     // redirect to your login page
-  },
+// export const authOptions: NextAuthOptions = {
+//   providers: [
+//     GoogleProvider({
+//       clientId: process.env.GOOGLE_CLIENT_ID!,
+//       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+//     }),
+//   ],
 
-  secret: process.env.NEXTAUTH_SECRET,
-};
+//   session: {
+//     strategy: "jwt",
+//   },
+
+//   callbacks: {
+//     async signIn({ user }) {
+//       console.log("SIGNIN CALLBACK RUNNING", user);
+
+//       if (!user.email) return false;
+
+//       const userRef = db.collection("users").doc(user.email);
+//       const doc = await userRef.get();
+
+//       if (!doc.exists) {
+//         console.log("CREATING NEW USER");
+
+//         await userRef.set({
+//           name: user.name,
+//           email: user.email,
+//           image: user.image,
+//           role: "client",
+//           createdAt: new Date(),
+//         });
+//       }
+
+//       return true;
+//     }
+//   },
+
+//   secret: process.env.NEXTAUTH_SECRET,
+// };

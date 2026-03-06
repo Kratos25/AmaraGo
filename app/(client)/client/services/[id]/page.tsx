@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Star, Clock, Heart, Share2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -74,9 +74,10 @@ const allServices: Service[] = [
   },
 ];
 
-export default function ServiceDetail({ params }: { params: { id: string } }) {
+export default function ServiceDetail({ params }: { params: Promise<{ id: string }> }) {
+  const {id} = use(params);
   const router = useRouter();
-  const service = allServices.find((s) => s.id === parseInt(params.id)) ?? allServices[0];
+  const service = allServices.find((s) => s.id === parseInt(id)) ?? allServices[0];
   const [isFavorite, setIsFavorite] = useState<boolean>(false);
 
   const discount = Math.round(((service.originalPrice - service.discountedPrice) / service.originalPrice) * 100);
@@ -121,7 +122,7 @@ export default function ServiceDetail({ params }: { params: { id: string } }) {
 
       <div className="px-4 max-w-7xl mx-auto -mt-8 relative z-10">
         {/* Sticky Book Button */}
-        <div className="sticky top-20 z-40 flex justify-end mb-8">
+        <div className="z-40 flex justify-end mb-8">
           <Button
             onClick={() => router.push(`/client/bookings/new?serviceId=${service.id}`)}
             className="bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] text-white shadow-2xl px-10 py-7 text-lg rounded-3xl hover:scale-105 transition-all"

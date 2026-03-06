@@ -7,6 +7,8 @@ import {
   Bell, Shield, HelpCircle, LogOut, MapPin,
   Gift, Sparkles, Check, X, Heart
 } from 'lucide-react';
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 type MenuItemType = {
   icon: React.ReactNode;
@@ -41,6 +43,21 @@ export default function Profile() {
   const nextTierPoints = 2000;
   const progress       = Math.round((loyaltyPoints / nextTierPoints) * 100);
 
+  const handleSignOut = async () => {
+    try {
+      // 1. Sign out from Firebase client
+      await signOut(auth);
+
+      // 2. Clear the session cookie via API
+      await fetch("/api/auth/logout", { method: "POST" });
+
+      // 3. Redirect to login
+      router.replace("/login");
+    } catch (error) {
+      console.error("Sign out failed:", error);
+    }
+  };
+
   const menuSections: { title: string; items: MenuItemType[] }[] = [
     {
       title: 'Account',
@@ -67,7 +84,7 @@ export default function Profile() {
     {
       title: '',
       items: [
-        { icon: <LogOut size={17} />, label: 'Sign Out', danger: true, action: () => router.push('/login') },
+        { icon: <LogOut size={17} />, label: 'Sign Out', danger: true, action: handleSignOut, },
       ],
     },
   ];
@@ -401,7 +418,7 @@ export default function Profile() {
           ))}
 
           <p className="pf-fade d7 text-center" style={{ fontSize:11, color:'#d1d5db' }}>
-            Amara Beauty v1.0.0 · Made with 💗 in Mumbai
+            AmaraGo v1.0.0 · Made with 💗 in Mumbai
           </p>
         </div>
 

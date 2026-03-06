@@ -1,8 +1,19 @@
-export { default } from "next-auth/middleware";
+import { NextRequest, NextResponse } from "next/server";
+
+export function middleware(req: NextRequest) {
+  const token = req.cookies.get("session")?.value;
+
+  if (!token) {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  return NextResponse.next();
+}
 
 export const config = {
-  // matcher: [],
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|login|$).*)",
+    "/admin/:path*",
+    "/provider/:path*",
+    "/client/:path*",
   ],
 };

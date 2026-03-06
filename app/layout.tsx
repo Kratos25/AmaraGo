@@ -1,9 +1,13 @@
-import AuthProvider from "@/app/utils/AuthProvider";
 import "./globals.css";
-
+import { AuthProvider } from "@/config/context/AuthContext";
 export const metadata = {
-  title: "Amara Beauty Parlour",
+  title: "AmaraGo",
   description: "Premium beauty & wellness at your doorstep",
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon-16x16.png',
+    apple: '/apple-touch-icon.png'
+  },
 };
 
 export default function RootLayout({
