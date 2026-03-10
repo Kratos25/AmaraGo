@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/config/context/AuthContext';
 import {
   User, Edit3, Camera, Star, Award, ChevronRight,
   Bell, Shield, HelpCircle, LogOut, MapPin,
@@ -31,13 +33,23 @@ const achievements = [
 
 export default function Profile() {
   const router = useRouter();
+  const { user } = useAuth();
   const [isEditing, setIsEditing]     = useState(false);
-  const [name, setName]               = useState('Ananya Sharma');
+  const [name, setName]               = useState(user?.displayName ?? 'User');
   const [phone, setPhone]             = useState('+91 98765 43210');
-  const [email]                       = useState('ananya@email.com');
+  const email                         = user?.email ?? '';
+  const photoURL                      = user?.photoURL ?? null;
   const [editName, setEditName]       = useState(name);
   const [editPhone, setEditPhone]     = useState(phone);
   const [notifications, setNotifs]    = useState(true);
+
+  // Sync name once Firebase auth resolves (user is null on first render)
+  useEffect(() => {
+    if (user?.displayName) {
+      setName(user.displayName);
+      setEditName(user.displayName);
+    }
+  }, [user]);
 
   const loyaltyPoints  = 1240;
   const nextTierPoints = 2000;
@@ -269,7 +281,11 @@ export default function Profile() {
             {/* Avatar */}
             <div className="av-ring mb-4">
               <div className="av-inner">
-                <User size={46} color="#e5849c" />
+                {photoURL ? (
+                  <Image src={photoURL} alt={name} width={96} height={96} style={{ objectFit: 'cover', width: '100%', height: '100%', borderRadius: '50%' }} referrerPolicy="no-referrer" />
+                ) : (
+                  <User size={46} color="#e5849c" />
+                )}
               </div>
               <div className="av-cam">
                 <Camera size={13} color="white" />
