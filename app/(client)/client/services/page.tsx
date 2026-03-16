@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Clock, Star, Filter, X, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -78,7 +78,14 @@ export default function Services() {
   const toggleFavorite = (id: number) => {
     setFavorites((prev) => prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]);
   };
+ useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const category = params.get("category");
 
+    if (category) {
+      setActiveCategory(decodeURIComponent(category));
+    }
+      }, []);
   const resetFilters = () => {
     const defaultFilters: Filters = {
       minRating: 0, minPrice: 0, maxPrice: 12000,
