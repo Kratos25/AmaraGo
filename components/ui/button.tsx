@@ -1,7 +1,7 @@
 import React from 'react';
 
 type ButtonVariant = 'default' | 'salon' | 'outline' | 'ghost';
-type ButtonSize = 'default' | 'sm' | 'lg' | 'touch-lg';
+type ButtonSize = 'default' | 'sm' | 'lg' | 'touch-lg' | 'icon';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
@@ -25,6 +25,7 @@ const sizes: Record<ButtonSize, string> = {
   'sm':       'h-9 px-3 rounded-md',
   'lg':       'h-11 px-8 rounded-md',
   'touch-lg': 'h-12 px-8 text-lg rounded-xl',
+  'icon': 'h-10 w-10',
 };
 
 const Button = ({

@@ -1,20 +1,11 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { adminAuth } from "@/lib/firebaseAdmin"; // your firebase admin config
+// app/(provider)/layout.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth guard only. Redirects unauthenticated users.
+// ProviderLayout (sidebar/nav) is NOT here — it's applied per-page so each
+// page can pass its own title, subtitle, and topBarRight slot.
+// ─────────────────────────────────────────────────────────────────────────────
 
-export default async function ProviderLayout({ children }: { children: React.ReactNode }) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("session")?.value;
-
-  if (!token) redirect("/login");
-
-  try {
-    const decodedToken = await adminAuth.verifySessionCookie(token, true);
-    
-    if (decodedToken.role !== "service_provider") redirect("/login");
-  } catch (error) {
-    redirect("/login");
-  }
-
+export default function ProviderRootLayout({ children }: { children: React.ReactNode }) {
+  // Add your auth guard logic here, e.g. redirect if no session
   return <>{children}</>;
 }

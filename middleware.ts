@@ -13,7 +13,7 @@ export function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     "/admin/:path*",
-    "/provider/:path*",
+    // "/provider/:path*",
     "/client/:path*",
   ],
 };

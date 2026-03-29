@@ -131,20 +131,29 @@ export default function Home() {
     <>
       <header className="fixed inset-x-0 top-0 z-50 bg-white/70 backdrop-blur-md shadow-lg border-b border-gray-100">
         <div className="flex items-center justify-between px-4 py-3 max-w-7xl mx-auto">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <MapPin className="text-[#e5849c]" size={22} />
-              <div>
-                <p className="text-xs text-gray-600 leading-none">Delivering to</p>
-                <p className="font-bold text-gray-800 text-sm">
-                  {isLoadingLocation ? 'Detecting...' : userLocation}
-                </p>
-              </div>
+          {/* Location */}
+          <div className="flex items-center gap-2">
+            <MapPin className="text-[#e5849c]" size={22} />
+            <div>
+              <p className="text-xs text-gray-600 leading-none">Delivering to</p>
+              <p className="font-bold text-gray-800 text-sm">
+                {isLoadingLocation ? 'Detecting...' : userLocation}
+              </p>
             </div>
           </div>
-          <button aria-label="Notifications" className="p-1">
-            <Bell className="text-[#e5849c]" size={26} />
-          </button>
+
+          {/* Right side actions */}
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => router.push('/provider')}
+              className="bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white text-xs font-semibold px-4 h-9 rounded-full shadow-sm"
+            >
+              Become a Provider
+            </Button>
+            <button aria-label="Notifications" className="p-1">
+              <Bell className="text-[#e5849c]" size={26} />
+            </button>
+          </div>
         </div>
       </header>
 
