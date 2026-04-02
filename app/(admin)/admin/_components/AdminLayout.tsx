@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, UserCircle, CalendarCheck,
@@ -8,6 +8,11 @@ import {
   ShieldCheck, LogOut, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
+import Image from 'next/image';
+import Logo from '@/public/Amara_Logo.png';
+import { signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary   #C84B31   Hover #B04028
@@ -124,6 +129,39 @@ export default function AdminLayout({
   const router   = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [adminName, setAdminName]   = useState('Super Admin');
+  const [adminEmail, setAdminEmail] = useState('');
+
+  // Fetch real admin name + email from Firebase
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+      setAdminEmail(user.email ?? '');
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) {
+          const name = snap.data()?.name ?? snap.data()?.displayName ?? '';
+          if (name) setAdminName(name);
+        }
+        // fallback to Firebase displayName
+        if (user.displayName) setAdminName(user.displayName);
+      } catch {
+        if (user.displayName) setAdminName(user.displayName);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Clear session cookie
+      await fetch('/api/logout', { method: 'POST' });
+    } catch {
+      // ignore errors, proceed to redirect anyway
+    }
+    router.replace('/login');
+  };
 
   const isActive = (href: string) =>
     href === '/admin' ? pathname === '/admin' : pathname.startsWith(href);
@@ -139,14 +177,15 @@ export default function AdminLayout({
       {/* Brand */}
       <div className={cn('border-b border-white/8', compact ? 'px-5 pt-6 pb-5' : 'px-5 pt-6 pb-5')}>
         <div className="flex items-center gap-2.5">
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'linear-gradient(135deg, #C84B31, #F2924A)' }}
-          >
-            <ShieldCheck className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <span className="font-bold text-[15px] text-white tracking-tight">Glamr</span>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+              // style={{ background: 'linear-gradient(135deg, #C84B31, #F2924A)' }}
+            >
+              <Image src={Logo} alt="Amara Logo" className="w-8 h-8 rounded-lg" />
+              {/* <Star className="w-4 h-4 text-white" /> */}
+            </div>
+            <span className="font-bold text-[15px] text-[#ffffff] tracking-tight">AmaraGo</span>
             <span className="ml-1.5 text-[10px] font-bold text-[#C84B31] bg-[#C84B31]/15 px-1.5 py-0.5 rounded-md">ADMIN</span>
           </div>
         </div>
@@ -159,8 +198,8 @@ export default function AdminLayout({
             👤
           </div>
           <div className="min-w-0">
-            <p className="font-semibold text-[13px] text-white truncate">Super Admin</p>
-            <p className="text-[11px] text-[#6B7280]">admin@glamr.in</p>
+            <p className="font-semibold text-[13px] text-white truncate">{adminName}</p>
+            <p className="text-[11px] text-[#6B7280] truncate">{adminEmail}</p>
           </div>
         </div>
       </div>
@@ -199,7 +238,7 @@ export default function AdminLayout({
           <span className="text-[13px] font-medium">View Client App</span>
         </button>
         <button
-          onClick={() => navigate('/login')}
+          onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[#9CA3AF] hover:bg-red-900/20 hover:text-red-400 transition-all group"
         >
           <LogOut className="w-4 h-4 text-[#6B7280] shrink-0 group-hover:text-red-400 transition-colors" />
@@ -244,7 +283,7 @@ export default function AdminLayout({
                 👤
               </div>
               <div>
-                <p className="text-[13px] font-semibold text-[#1A1A1A] leading-none">Super Admin</p>
+                <p className="text-[13px] font-semibold text-[#1A1A1A] leading-none">{adminName}</p>
                 <p className="text-[10px] text-[#9CA3AF] mt-0.5">Administrator</p>
               </div>
             </div>
@@ -345,8 +384,8 @@ export default function AdminLayout({
                   👤
                 </div>
                 <div className="min-w-0">
-                  <p className="font-semibold text-[14px] text-white truncate">Super Admin</p>
-                  <p className="text-[11px] text-[#6B7280]">admin@glamr.in</p>
+                  <p className="font-semibold text-[14px] text-white truncate">{adminName}</p>
+                  <p className="text-[11px] text-[#6B7280] truncate">{adminEmail}</p>
                 </div>
               </div>
             </div>
@@ -385,7 +424,7 @@ export default function AdminLayout({
                 <span className="text-[14px] font-medium">View Client App</span>
               </button>
               <button
-                onClick={() => navigate('/login')}
+                onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-[#9CA3AF] hover:bg-red-900/20 hover:text-red-400 transition-all group"
               >
                 <LogOut className="w-4 h-4 text-[#6B7280] shrink-0 group-hover:text-red-400" />
