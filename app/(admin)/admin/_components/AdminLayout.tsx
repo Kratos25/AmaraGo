@@ -231,7 +231,7 @@ export default function AdminLayout({
       {/* Bottom */}
       <div className="px-3 py-3 border-t border-white/8 space-y-0.5">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/client/home')}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[#9CA3AF] hover:bg-white/5 hover:text-white transition-all"
         >
           <ChevronRight className="w-4 h-4 text-[#6B7280] shrink-0" />

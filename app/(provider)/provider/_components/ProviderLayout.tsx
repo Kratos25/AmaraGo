@@ -10,6 +10,8 @@ import {
 import { cn } from '@/app/lib/utils';
 import Image from 'next/image';
 import Logo from '@/public/Amara_Logo.png';
+import { signOut, onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary   #C84B31   Hover #B04028
@@ -101,6 +103,17 @@ export default function ProviderLayout({
     </button>
   );
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Clear session cookie
+      await fetch('/api/logout', { method: 'POST' });
+    } catch {
+      // ignore errors, proceed to redirect anyway
+    }
+    router.replace('/login');
+  };
+
   // ── Sidebar bottom actions (shared between desktop sidebar + mobile drawer) ─
   const SidebarBottom = ({ itemPy = 'py-2.5', textSize = 'text-[13px]', onNav }: {
     itemPy?: string;
@@ -110,7 +123,7 @@ export default function ProviderLayout({
     <div className="px-3 py-3 border-t border-[#EBEBEB] space-y-0.5">
       {/* Go to Client Page */}
       <button
-        onClick={() => { router.push('/'); onNav?.(); }}
+        onClick={() => { router.push('/client/home'); onNav?.(); }}
         className={cn(
           'w-full flex items-center gap-3 px-3 rounded-xl transition-all group',
           'text-[#C84B31] bg-[#FFF0EC] border border-[#FDDDD5] hover:bg-[#FFE8E0]',
@@ -133,7 +146,7 @@ export default function ProviderLayout({
       </button>
 
       <button
-        onClick={() => router.push('/login')}
+        onClick={handleLogout}
         className={cn(
           'w-full flex items-center gap-3 px-3 rounded-xl text-[#6B7280] hover:bg-red-50 hover:text-red-600 transition-all group',
           itemPy,
