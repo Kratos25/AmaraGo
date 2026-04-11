@@ -8,6 +8,8 @@ import {
   ShieldCheck, LogOut, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
+import Image from 'next/image';
+import Logo from '@/public/Amara_Logo.png';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary   #C84B31   Hover #B04028
@@ -139,14 +141,15 @@ export default function AdminLayout({
       {/* Brand */}
       <div className={cn('border-b border-white/8', compact ? 'px-5 pt-6 pb-5' : 'px-5 pt-6 pb-5')}>
         <div className="flex items-center gap-2.5">
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'linear-gradient(135deg, #C84B31, #F2924A)' }}
-          >
-            <ShieldCheck className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <span className="font-bold text-[15px] text-white tracking-tight">Glamr</span>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+              // style={{ background: 'linear-gradient(135deg, #C84B31, #F2924A)' }}
+            >
+              <Image src={Logo} alt="Amara Logo" className="w-8 h-8 rounded-lg" />
+              {/* <Star className="w-4 h-4 text-white" /> */}
+            </div>
+            <span className="font-bold text-[15px] text-[#ffffff] tracking-tight">AmaraGo</span>
             <span className="ml-1.5 text-[10px] font-bold text-[#C84B31] bg-[#C84B31]/15 px-1.5 py-0.5 rounded-md">ADMIN</span>
           </div>
         </div>
