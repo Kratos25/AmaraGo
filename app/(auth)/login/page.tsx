@@ -342,13 +342,13 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  User,
 } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -358,9 +358,21 @@ import Logo from '@/public/Amara_Logo.png';
 import { LoginLeftPanel } from '@/components/ui/LoginLeftPanel';
 import { FcGoogle } from "react-icons/fc";
 
-function getRedirectPath(email: string | null): string {
-  if (email === "admin@salon.com") return "/admin/dashboard";
-  if (email === "provider@salon.com") return "/provider/dashboard";
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "admin@amarago.com";
+
+async function getRedirectPath(user: User): Promise<string> {
+  // Admin check — hardcoded email always goes to admin
+  if (user.email === ADMIN_EMAIL) return "/admin";
+
+  // Check Firestore for provider role
+  try {
+    const snap = await getDoc(doc(db, "users", user.uid));
+    if (snap.exists() && snap.data()?.isProvider === true) {
+      return "/provider";
+    }
+  } catch {
+    // fallback to client if Firestore fails
+  }
   return "/client/home";
 }
 
@@ -387,6 +399,7 @@ export default function AuthPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
+  const isRegistering = React.useRef(false);
 
   const { toast } = useToast();
   const router = useRouter();
@@ -394,6 +407,8 @@ export default function AuthPage() {
   // ── SINGLE unified auth effect ──────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      // Skip redirect while registration flow is in progress — we handle it manually
+      if (isRegistering.current) return;
       if (user) {
         try {
           const token = await user.getIdToken();
@@ -401,7 +416,8 @@ export default function AuthPage() {
         } catch {
           // cookie may already be valid
         }
-        router.replace(getRedirectPath(user.email));
+        const path = await getRedirectPath(user);
+        router.replace(path);
       } else {
         setAuthChecking(false);
       }
@@ -418,7 +434,8 @@ export default function AuthPage() {
       const token = await user.getIdToken();
       await setSessionCookie(token);
       toast({ title: 'Welcome back!', description: 'You have successfully logged in.' });
-      router.replace(getRedirectPath(user.email));
+      const path = await getRedirectPath(user);
+      router.replace(path);
     } catch (error: any) {
       setFormError(friendlyError(error.code));
     } finally {
@@ -430,12 +447,30 @@ export default function AuthPage() {
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
+    isRegistering.current = true; // prevent onAuthStateChanged from redirecting mid-flow
     try {
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Update Firebase displayName so it's visible everywhere
+      const { updateProfile } = await import('firebase/auth');
+      await updateProfile(user, { displayName: name });
+
       const token = await user.getIdToken();
       await setSessionCookie(token);
+
+      // Save full user doc to Firestore — must await before redirecting
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        name: name,
+        phone: phone,
+        isProvider: false,
+        role: 'client',
+        createdAt: serverTimestamp(),
+      });
+
       toast({ title: 'Account created!', description: 'Welcome to AmaraGo.' });
-      router.replace(getRedirectPath(user.email));
+      router.replace('/client/home');
     } catch (error: any) {
       toast({
         title: 'Registration failed',
@@ -444,6 +479,7 @@ export default function AuthPage() {
       });
     } finally {
       setIsLoading(false);
+      isRegistering.current = false;
     }
   };
 
@@ -457,8 +493,24 @@ export default function AuthPage() {
       const { user } = await signInWithPopup(auth, provider);
       const token = await user.getIdToken();
       await setSessionCookie(token);
+
+      // Create user doc if it doesn't exist yet (first Google login)
+      const userRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        await setDoc(userRef, {
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName ?? "",
+          isProvider: false,
+          role: "client",
+          createdAt: serverTimestamp(),
+        });
+      }
+
       toast({ title: 'Welcome!', description: `Signed in as ${user.displayName ?? user.email}` });
-      router.replace(getRedirectPath(user.email));
+      const path = await getRedirectPath(user);
+      router.replace(path);
     } catch (error: any) {
       if (error.code !== 'auth/popup-closed-by-user') {
         toast({
