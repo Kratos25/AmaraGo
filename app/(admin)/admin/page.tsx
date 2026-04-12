@@ -22,10 +22,15 @@ import { adminAPI, providersAPI, bookingsAPI, type DashboardStats, type Provider
 // Border    #EBEBEB
 // Text-1    #1A1A1A   Text-2 #6B7280   Text-3 #9CA3AF
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-// Weekly sparkline data (Mon–Sun) — decorative only
-const WEEKLY_REVENUE = [18400, 22100, 15800, 31200, 28900, 42000, 38500];
-const WEEKLY_BOOKINGS = [12, 18, 9, 24, 21, 31, 27];
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatRevenue(v: number): string {
+  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000)   return `₹${(v / 1000).toFixed(1)}K`;
+  return `₹${Math.round(v).toLocaleString('en-IN')}`;
+}
+
+const ZEROS7 = [0, 0, 0, 0, 0, 0, 0];
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 
@@ -149,79 +154,79 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
         <StatCard
           label="Total Clients"
-          value={stats ? stats.verified_clients.toLocaleString() : "2,450"}
-          change="+12% MTD"
+          value={stats ? stats.verified_clients.toLocaleString('en-IN') : '—'}
+          change={stats ? `${stats.verified_clients} registered` : '…'}
           positive
           Icon={Users}
           iconColor="text-blue-500"
           iconBg="bg-blue-50"
           iconBorder="border-blue-100"
-          sparkData={[180, 210, 195, 240, 228, 245, 245]}
+          sparkData={stats?.weekly_bookings ?? ZEROS7}
           sparkColor="#3B82F6"
           onClick={() => router.push('/admin/clients')}
         />
         <StatCard
           label="Service Providers"
-          value={stats ? stats.active_providers.toString() : "48"}
-          change="+5% MTD"
+          value={stats ? stats.active_providers.toString() : '—'}
+          change={stats ? `${stats.pending_provider_approvals} pending` : '…'}
           positive
           Icon={UserCheck}
           iconColor="text-[#C84B31]"
           iconBg="bg-[#FFF0EC]"
           iconBorder="border-[#FDDDD5]"
-          sparkData={[38, 40, 41, 43, 44, 46, 48]}
+          sparkData={stats?.weekly_bookings ?? ZEROS7}
           sparkColor="#C84B31"
           onClick={() => router.push('/admin/providers')}
         />
         <StatCard
           label="Total Bookings"
-          value={stats ? stats.total_bookings.toLocaleString() : "1,284"}
-          change="+18% MTD"
+          value={stats ? stats.total_bookings.toLocaleString('en-IN') : '—'}
+          change={stats ? `${stats.completed_bookings} completed` : '…'}
           positive
           Icon={CalendarCheck}
           iconColor="text-green-500"
           iconBg="bg-green-50"
           iconBorder="border-green-100"
-          sparkData={[92, 110, 98, 124, 118, 131, 127]}
+          sparkData={stats?.weekly_bookings ?? ZEROS7}
           sparkColor="#16A34A"
           onClick={() => router.push('/admin/bookings')}
         />
         <StatCard
           label="Active Bookings"
-          value="34"
-          change="+8% today"
+          value={stats ? stats.active_bookings.toString() : '—'}
+          change={stats ? `${stats.pending_bookings} searching` : '…'}
           positive
           Icon={CalendarClock}
           iconColor="text-amber-500"
           iconBg="bg-amber-50"
           iconBorder="border-amber-100"
-          sparkData={[22, 28, 19, 34, 31, 38, 34]}
+          sparkData={stats?.weekly_bookings ?? ZEROS7}
           sparkColor="#F59E0B"
           onClick={() => router.push('/admin/bookings?status=active')}
         />
         <StatCard
           label="Revenue (MTD)"
-          value="₹4.2L"
-          change="+22% MTD"
+          value={stats ? formatRevenue(stats.total_revenue) : '—'}
+          change={stats ? `${stats.booking_completion_rate}% completion` : '…'}
           positive
           Icon={IndianRupee}
           iconColor="text-purple-500"
           iconBg="bg-purple-50"
           iconBorder="border-purple-100"
-          sparkData={[18400, 22100, 15800, 31200, 28900, 42000, 38500]}
+          sparkData={stats?.weekly_revenue ?? ZEROS7}
           sparkColor="#8B5CF6"
           onClick={() => router.push('/admin/payments')}
         />
         <StatCard
           label="Pending Approvals"
-          value={String(pendingProviders.length)}
-          change="Needs action"
-          positive={false}
+          value={stats ? stats.pending_provider_approvals.toString() : '—'}
+          change={stats && stats.pending_provider_approvals > 0 ? 'Needs action' : 'All clear'}
+          positive={!stats || stats.pending_provider_approvals === 0}
           Icon={AlertCircle}
           iconColor="text-rose-500"
           iconBg="bg-rose-50"
           iconBorder="border-rose-100"
-          sparkData={[8, 6, 9, 5, 7, 4, pendingProviders.length]}
+          sparkData={stats?.weekly_bookings ?? ZEROS7}
           sparkColor="#F43F5E"
         />
       </div>
@@ -336,9 +341,11 @@ export default function AdminDashboard() {
 
               {/* Bar chart */}
               {(() => {
-                const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                const maxRev = Math.max(...WEEKLY_REVENUE);
-                const maxBk  = Math.max(...WEEKLY_BOOKINGS);
+                const wRev = stats?.weekly_revenue  ?? ZEROS7;
+                const wBk  = stats?.weekly_bookings ?? ZEROS7;
+                const days = stats?.weekly_labels   ?? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+                const maxRev = Math.max(...wRev, 1);
+                const maxBk  = Math.max(...wBk,  1);
                 return (
                   <div className="flex items-end gap-2 sm:gap-3 h-40">
                     {days.map((day, i) => (
@@ -346,13 +353,13 @@ export default function AdminDashboard() {
                         <div className="flex items-end gap-0.5 w-full h-32">
                           {/* Revenue bar */}
                           <div
-                            className="flex-1 rounded-t-lg bg-[#C84B31] transition-all duration-500 min-h-[4px]"
-                            style={{ height: `${(WEEKLY_REVENUE[i] / maxRev) * 100}%` }}
+                            className="flex-1 rounded-t-lg bg-[#C84B31] transition-all duration-700 min-h-[4px]"
+                            style={{ height: `${(wRev[i] / maxRev) * 100}%` }}
                           />
                           {/* Bookings bar */}
                           <div
-                            className="flex-1 rounded-t-lg bg-blue-400 transition-all duration-500 min-h-[4px]"
-                            style={{ height: `${(WEEKLY_BOOKINGS[i] / maxBk) * 100}%` }}
+                            className="flex-1 rounded-t-lg bg-blue-400 transition-all duration-700 min-h-[4px]"
+                            style={{ height: `${(wBk[i] / maxBk) * 100}%` }}
                           />
                         </div>
                         <span className="text-[10px] text-[#9CA3AF] font-medium">{day}</span>
@@ -363,18 +370,27 @@ export default function AdminDashboard() {
               })()}
 
               {/* Summary row */}
-              <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-[#EBEBEB]">
-                {[
-                  { label: 'Total Revenue',   value: '₹1,97,900', color: 'text-[#C84B31]' },
-                  { label: 'Total Bookings',  value: '142',        color: 'text-blue-500'  },
-                  { label: 'Avg per Booking', value: '₹1,394',    color: 'text-green-500' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="text-center">
-                    <p className={cn('font-bold text-[16px] sm:text-[18px]', color)}>{value}</p>
-                    <p className="text-[10px] text-[#9CA3AF] mt-0.5">{label}</p>
+              {(() => {
+                const wRev   = stats?.weekly_revenue  ?? ZEROS7;
+                const wBk    = stats?.weekly_bookings ?? ZEROS7;
+                const totRev = wRev.reduce((a, b) => a + b, 0);
+                const totBk  = wBk.reduce((a, b) => a + b, 0);
+                const avg    = totBk > 0 ? Math.round(totRev / totBk) : 0;
+                return (
+                  <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-[#EBEBEB]">
+                    {[
+                      { label: '7-Day Revenue',   value: formatRevenue(totRev), color: 'text-[#C84B31]' },
+                      { label: '7-Day Bookings',  value: totBk.toString(),      color: 'text-blue-500'  },
+                      { label: 'Avg per Booking', value: avg > 0 ? formatRevenue(avg) : '—', color: 'text-green-500' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="text-center">
+                        <p className={cn('font-bold text-[16px] sm:text-[18px]', color)}>{value}</p>
+                        <p className="text-[10px] text-[#9CA3AF] mt-0.5">{label}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -480,12 +496,12 @@ export default function AdminDashboard() {
                 <p className="font-bold text-[15px] text-[#1A1A1A]">Platform Health</p>
               </div>
               <div className="space-y-3">
-                {[
-                  { label: 'Provider Fill Rate',    value: 94, color: '#16A34A' },
-                  { label: 'Booking Completion',    value: 88, color: '#C84B31' },
-                  { label: 'Client Retention',      value: 76, color: '#2563EB' },
-                  { label: 'Payment Success Rate',  value: 99, color: '#D97706' },
-                ].map(({ label, value, color }) => (
+                {([
+                  { label: 'Provider Fill Rate',   value: stats?.provider_fill_rate      ?? 0,  color: '#16A34A' },
+                  { label: 'Booking Completion',   value: stats?.booking_completion_rate ?? 0,  color: '#C84B31' },
+                  { label: 'Active vs Total',      value: stats && stats.total_bookings > 0 ? Math.round((stats.active_bookings / stats.total_bookings) * 100) : 0, color: '#2563EB' },
+                  { label: 'Pending Resolution',   value: stats && stats.total_bookings > 0 ? Math.round(((stats.total_bookings - stats.pending_bookings) / stats.total_bookings) * 100) : 0, color: '#D97706' },
+                ] as { label: string; value: number; color: string }[]).map(({ label, value, color }) => (
                   <div key={label}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[12px] font-medium text-[#6B7280]">{label}</span>

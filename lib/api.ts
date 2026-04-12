@@ -167,8 +167,14 @@ export interface DashboardStats {
   total_bookings: number;
   completed_bookings: number;
   pending_bookings: number;
+  active_bookings: number;
   total_revenue: number;
   pending_provider_approvals: number;
+  weekly_revenue: number[];
+  weekly_bookings: number[];
+  weekly_labels: string[];
+  booking_completion_rate: number;
+  provider_fill_rate: number;
 }
 
 export interface Notification {
