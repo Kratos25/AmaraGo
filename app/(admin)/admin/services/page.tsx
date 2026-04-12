@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Scissors, Package, LayoutGrid, Ticket } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import AdminLayout from '../_components/AdminLayout';
@@ -19,7 +20,19 @@ const TABS = [
 ];
 
 export default function AdminServices() {
-  const [activeTab, setActiveTab] = useState<TabKey>('services');
+  const searchParams = useSearchParams();
+  const tabParam     = searchParams.get('tab') as TabKey | null;
+  const openAdd      = searchParams.get('openAdd') === 'true';
+
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    tabParam && TABS.some((t) => t.key === tabParam) ? tabParam : 'services',
+  );
+
+  useEffect(() => {
+    if (tabParam && TABS.some((t) => t.key === tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   return (
     <AdminLayout title="Services" subtitle="Manage services, packages, categories and offers">
@@ -39,7 +52,7 @@ export default function AdminServices() {
         ))}
       </div>
 
-      {activeTab === 'services'   && <ServicesTab />}
+      {activeTab === 'services'   && <ServicesTab autoOpenAdd={openAdd} />}
       {activeTab === 'packages'   && <PackagesTab />}
       {activeTab === 'categories' && <CategoriesTab />}
       {activeTab === 'offers'     && <OffersTab />}

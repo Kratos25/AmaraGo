@@ -171,6 +171,15 @@ export interface DashboardStats {
   pending_provider_approvals: number;
 }
 
+export interface Notification {
+  id: string;
+  type: 'new_booking' | 'pending_approval';
+  title: string;
+  message: string;
+  reference_id: string;
+  created_at?: string;
+}
+
 export interface ValidateCouponResponse {
   valid: boolean;
   discount_amount: number;
@@ -212,6 +221,8 @@ export const usersAPI = {
 export const categoriesAPI = {
   list: () => api.get<Category[]>('/categories'),
 
+  listActive: () => api.get<Category[]>('/categories/active'),
+
   create: (data: { name: string; icon: string; description?: string; active?: boolean }) =>
     api.post<Category>('/categories', data),
 
@@ -226,6 +237,8 @@ export const categoriesAPI = {
 export const servicesAPI = {
   list: (params?: { category_id?: string; popular?: boolean; active?: boolean }) =>
     api.get<Service[]>('/services', { params }),
+
+  listAll: () => api.get<Service[]>('/services', { params: { all: true } }),
 
   getById: (id: string) => api.get<Service>(`/services/${id}`),
 
@@ -242,6 +255,8 @@ export const servicesAPI = {
 
 export const packagesAPI = {
   list: () => api.get<Package[]>('/packages'),
+
+  listAll: () => api.get<Package[]>('/packages', { params: { all: true } }),
 
   getById: (id: string) => api.get<Package>(`/packages/${id}`),
 
@@ -353,4 +368,7 @@ export const providersAPI = {
 export const adminAPI = {
   getDashboard: () => api.get<DashboardStats>('/admin/dashboard'),
   listClients: () => api.get<UserProfile[]>('/admin/clients'),
+  getClient: (uid: string) => api.get<UserProfile>(`/admin/clients/${uid}`),
+  getClientBookings: (uid: string) => api.get<Booking[]>(`/admin/clients/${uid}/bookings`),
+  getNotifications: () => api.get<Notification[]>('/admin/notifications'),
 };

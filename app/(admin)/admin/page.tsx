@@ -137,7 +137,7 @@ export default function AdminDashboard() {
       subtitle={today}
       topBarRight={
         <Button
-          onClick={() => router.push('/admin/services/new')}
+          onClick={() => router.push('/admin/services?tab=services&openAdd=true')}
           className="h-9 px-4 bg-[#C84B31] hover:bg-[#B04028] text-white font-semibold text-[13px] rounded-xl shadow-none border-0"
         >
           + Add Service

@@ -20,7 +20,7 @@ export default function PackagesTab() {
   });
 
   useEffect(() => {
-    packagesAPI.list()
+    packagesAPI.listAll()
       .then(({ data }) => setPackages(data))
       .catch(() => toast({ title: 'Failed to load packages', variant: 'destructive' }))
       .finally(() => setLoading(false));

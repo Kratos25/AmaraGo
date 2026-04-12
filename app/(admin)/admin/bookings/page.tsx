@@ -342,6 +342,8 @@ function EmptyState({ icon, label, sub }: { icon: string; label: string; sub: st
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+import { exportToExcel } from '@/lib/exportExcel';
+
 export default function AdminBookings() {
   const router    = useRouter();
   const { toast } = useToast();
@@ -412,6 +414,29 @@ export default function AdminBookings() {
 
   const handleView = (id: string) => router.push(`/admin/bookings/${id}`);
 
+  const handleExport = () => {
+    const toRow = (b: Booking) => ({
+      'Booking Ref':      b.bookingRef,
+      Client:             b.client,
+      'Client Phone':     b.clientPhone,
+      Provider:           b.provider,
+      Service:            b.service,
+      Location:           b.location,
+      'Scheduled Date':   b.scheduledDate,
+      'Scheduled Time':   b.scheduledTime,
+      'Amount (₹)':       b.amount,
+      'Platform Fee (₹)': b.platformFee,
+      'Provider Earning (₹)': b.providerEarning,
+      Status:             b.status,
+      'Created At':       b.createdAt,
+    });
+    exportToExcel([
+      { name: 'All Bookings',       rows: bookings.map(toRow) },
+      { name: 'Cancelled Bookings', rows: bookings.filter((b) => b.status === 'cancelled').map(toRow) },
+    ], 'bookings');
+    toast({ title: 'Exported ✓', description: 'bookings.xlsx downloaded.' });
+  };
+
   return (
     <AdminLayout
       title="Bookings"
@@ -419,7 +444,7 @@ export default function AdminBookings() {
       topBarRight={
         <button
           className="h-9 px-4 flex items-center gap-2 rounded-xl border border-[#EBEBEB] bg-white text-[12px] font-semibold text-[#6B7280] hover:bg-[#F5F4F2] transition-colors"
-          onClick={() => {}}
+          onClick={handleExport}
         >
           <Download className="w-3.5 h-3.5" /> Export
         </button>

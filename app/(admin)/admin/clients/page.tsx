@@ -239,6 +239,8 @@ function EmptyState({ icon, label, sub }: { icon: string; label: string; sub: st
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+import { exportToExcel } from '@/lib/exportExcel';
+
 export default function AdminClients() {
   const router    = useRouter();
   const { toast } = useToast();
@@ -316,6 +318,27 @@ export default function AdminClients() {
 
   const handleView = (id: string) => router.push(`/admin/clients/${id}`);
 
+  const handleExport = () => {
+    const rows = clients.map((c) => ({
+      Name:               c.name,
+      Email:              c.email,
+      Phone:              c.phone,
+      Location:           c.location,
+      Status:             c.status,
+      'Total Bookings':   c.totalBookings,
+      'Completed':        c.completedBookings,
+      'Cancelled':        c.cancelledBookings,
+      'Total Spend (₹)':  c.totalSpend,
+      'Avg Order (₹)':    c.avgBookingValue,
+      'Favourite Service':c.favoriteService,
+      'Last Booking':     c.lastBooking,
+      'Joined':           c.joinedAt,
+      VIP:                c.isVip ? 'Yes' : 'No',
+    }));
+    exportToExcel([{ name: 'Clients', rows }], 'clients');
+    toast({ title: 'Exported ✓', description: 'clients.xlsx downloaded.' });
+  };
+
   return (
     <AdminLayout
       title="Clients"
@@ -323,7 +346,7 @@ export default function AdminClients() {
       topBarRight={
         <Button
           className="h-9 px-4 bg-[#C84B31] hover:bg-[#B04028] text-white font-semibold text-[13px] rounded-xl shadow-none border-0"
-          onClick={() => {/* export */}}
+          onClick={handleExport}
         >
           <Download className="w-3.5 h-3.5 mr-1.5" /> Export
         </Button>

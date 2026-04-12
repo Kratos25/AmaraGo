@@ -277,6 +277,8 @@ function EmptyState({ icon, label, sub }: { icon: string; label: string; sub: st
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 
+import { exportToExcel } from '@/lib/exportExcel';
+
 export default function AdminServiceProviders() {
   const router   = useRouter();
   const { toast } = useToast();
@@ -372,6 +374,28 @@ export default function AdminServiceProviders() {
 
   const handleView = (id: string) => router.push(`/admin/providers/${id}`);
 
+  const handleExport = () => {
+    const toRow = (p: ServiceProvider) => ({
+      Name:               p.name,
+      Phone:              p.phone,
+      Location:           p.location,
+      Experience:         p.experience,
+      Specialties:        p.specialties.join(', '),
+      Rating:             p.rating,
+      'Jobs Completed':   p.jobsCompleted,
+      'Earnings Total':   p.earningsTotal,
+      Status:             p.status,
+      'Joined At':        p.joinedAt,
+      'Last Active':      p.lastActive,
+    });
+    exportToExcel([
+      { name: 'All Providers',       rows: providers.map(toRow) },
+      { name: 'Suspended Providers', rows: providers.filter((p) => p.status === 'suspended').map(toRow) },
+      { name: 'Top Rated Providers', rows: providers.filter((p) => p.status === 'active' && p.rating >= 4.7).map(toRow) },
+    ], 'service-providers');
+    toast({ title: 'Exported ✓', description: 'service-providers.xlsx downloaded.' });
+  };
+
   // Summary stats
   const totalEarnings     = providers.filter((p) => p.status === 'active').reduce((s, p) => s + p.earningsThisMonth, 0);
   const avgRating         = providers.filter((p) => p.rating > 0).reduce((s, p, _, a) => s + p.rating / a.length, 0);
@@ -450,7 +474,7 @@ export default function AdminServiceProviders() {
         </button>
 
         {/* Export */}
-        <button className="h-10 px-4 flex items-center gap-2 rounded-xl border border-[#EBEBEB] bg-white text-[12px] font-semibold text-[#6B7280] hover:bg-[#F5F4F2] transition-colors">
+        <button onClick={handleExport} className="h-10 px-4 flex items-center gap-2 rounded-xl border border-[#EBEBEB] bg-white text-[12px] font-semibold text-[#6B7280] hover:bg-[#F5F4F2] transition-colors">
           <Download className="w-3.5 h-3.5" /> Export
         </button>
       </div>
