@@ -73,7 +73,7 @@ export default function BookingStatus() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fdf6f8]">
+    <div className="min-h-screen bg-gray-50">
 
       {/* ── Toast Notification ── */}
       <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${
@@ -86,20 +86,20 @@ export default function BookingStatus() {
       </div>
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-pink-100">
+      <header className="sticky top-0 z-50 bg-[#111827]">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-4">
           <button
             onClick={() => router.push('/client/home')}
-            className="w-10 h-10 flex items-center justify-center rounded-2xl bg-pink-50 hover:bg-pink-100 transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
           >
-            <ArrowLeft size={20} className="text-[#c4607a]" />
+            <ArrowLeft size={20} className="text-white" />
           </button>
           <div className="flex-1">
-            <h1 className="font-bold text-gray-900">Booking Status</h1>
-            <p className="text-xs text-gray-400">#{booking.bookingId}</p>
+            <h1 className="font-bold text-white">Booking Status</h1>
+            <p className="text-xs text-white/40">#{booking.bookingId}</p>
           </div>
-          <button className="w-10 h-10 flex items-center justify-center rounded-2xl bg-pink-50 hover:bg-pink-100 transition-colors">
-            <Share2 size={16} className="text-[#c4607a]" />
+          <button className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-colors">
+            <Share2 size={16} className="text-white" />
           </button>
         </div>
       </header>
@@ -108,12 +108,12 @@ export default function BookingStatus() {
 
         {/* ── Finding / Assigned Hero ── */}
         {status === 'finding' ? (
-          <section className="bg-white rounded-3xl border border-pink-50 shadow-sm p-8 text-center">
+          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 text-center">
             {/* Pulsing rings */}
             <div className="relative w-24 h-24 mx-auto mb-6">
-              <div className="absolute inset-0 rounded-full bg-pink-100 animate-ping opacity-40" />
-              <div className="absolute inset-2 rounded-full bg-pink-200 animate-ping opacity-30" style={{ animationDelay: '0.3s' }} />
-              <div className="relative w-full h-full rounded-full bg-gradient-to-br from-[#e5849c] to-[#d4607a] flex items-center justify-center shadow-lg shadow-pink-200">
+              <div className="absolute inset-0 rounded-full bg-[#e5849c]/20 animate-ping opacity-40" />
+              <div className="absolute inset-2 rounded-full bg-[#e5849c]/30 animate-ping opacity-30" style={{ animationDelay: '0.3s' }} />
+              <div className="relative w-full h-full rounded-full bg-[#111827] flex items-center justify-center shadow-lg shadow-gray-300">
                 <span className="text-3xl">🔍</span>
               </div>
             </div>
@@ -131,7 +131,7 @@ export default function BookingStatus() {
           </section>
         ) : (
           /* ── Expert Card ── */
-          <section className="bg-white rounded-3xl border border-pink-50 shadow-sm overflow-hidden">
+          <section className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
             {/* Gradient top bar */}
             <div className="h-2 bg-gradient-to-r from-[#e5849c] to-[#E5AFBC]" />
             <div className="p-5">
@@ -198,7 +198,7 @@ export default function BookingStatus() {
         )}
 
         {/* ── Progress Tracker ── */}
-        <section className="bg-white rounded-3xl border border-pink-50 shadow-sm p-5">
+        <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
           <h3 className="font-bold text-gray-900 mb-5">Live Tracking</h3>
           <div className="space-y-0">
             {steps.map((step, i) => {
@@ -210,9 +210,9 @@ export default function BookingStatus() {
                   <div className="flex flex-col items-center">
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0 border-2 transition-all ${
                       step.done
-                        ? 'bg-[#e5849c] border-[#e5849c] text-white shadow-md shadow-pink-100'
+                        ? 'bg-[#e5849c] border-[#e5849c] text-white shadow-md shadow-rose-100'
                         : isActive
-                        ? 'bg-pink-50 border-[#e5849c] animate-pulse'
+                        ? 'bg-[#fff5f7] border-[#e5849c] animate-pulse'
                         : 'bg-gray-50 border-gray-200'
                     }`}>
                       {step.done ? <CheckCircle size={16} /> : <span>{step.icon}</span>}
@@ -239,7 +239,7 @@ export default function BookingStatus() {
         </section>
 
         {/* ── Booking Details Card ── */}
-        <section className="bg-white rounded-3xl border border-pink-50 shadow-sm overflow-hidden">
+        <section className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-5 pt-5 pb-3 border-b border-gray-50">
             <h3 className="font-bold text-gray-900">Booking Details</h3>
           </div>
@@ -281,15 +281,15 @@ export default function BookingStatus() {
         </section>
 
         {/* ── Help & Safety ── */}
-        <section className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-3xl border border-pink-100 p-5">
+        <section className="bg-[#111827] rounded-3xl p-5">
           <div className="flex items-start gap-3">
             <span className="text-2xl">🛡️</span>
             <div>
-              <p className="font-bold text-gray-900 text-sm">Your safety is our priority</p>
-              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+              <p className="font-bold text-white text-sm">Your safety is our priority</p>
+              <p className="text-xs text-white/50 mt-1 leading-relaxed">
                 All our experts are background-verified and trained. You can share your live status with a trusted contact.
               </p>
-              <button className="mt-3 text-xs font-bold text-[#e5849c] hover:underline">
+              <button className="mt-3 text-xs font-bold text-[#e5849c] hover:text-[#f099b0] transition-colors">
                 Share live status →
               </button>
             </div>
@@ -298,7 +298,7 @@ export default function BookingStatus() {
       </main>
 
       {/* /* ── Floating Back to Home ── */}
-      <div className="fixed bottom-0 inset-x-0 z-50 bg-white/90 backdrop-blur-xl border-t border-pink-100 px-4 py-4">
+      <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 px-4 py-4">
         <div className="max-w-2xl mx-auto">
           <button
             onClick={() => router.push('/client/home')}
