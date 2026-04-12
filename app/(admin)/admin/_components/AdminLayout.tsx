@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, UserCircle, CalendarCheck,
   Scissors, CreditCard, Settings, Bell, Menu, X,
-  ShieldCheck, LogOut, ChevronRight,
+  ShieldCheck, LogOut, ChevronRight, UserCheck, CalendarPlus,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import Image from 'next/image';
@@ -13,6 +13,7 @@ import Logo from '@/public/Amara_Logo.png';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { adminAPI, type Notification } from '@/lib/api';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary   #C84B31   Hover #B04028
@@ -75,6 +76,81 @@ const MOBILE_TABS: NavItemDef[] = [
   { href: '/admin/settings',  label: 'Settings',  Icon: Settings        },
 ];
 
+// ─── Notification Panel ───────────────────────────────────────────────────────
+
+function NotificationPanel({
+  notifications,
+  loading,
+  onClose,
+  onNavigate,
+}: {
+  notifications: Notification[];
+  loading: boolean;
+  onClose: () => void;
+  onNavigate: (href: string) => void;
+}) {
+  return (
+    <div className="absolute right-0 top-12 w-[340px] bg-white border border-[#EBEBEB] rounded-2xl shadow-xl z-50 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#EBEBEB]">
+        <p className="font-bold text-[14px] text-[#1A1A1A]">Notifications</p>
+        <button onClick={onClose} className="w-6 h-6 rounded-full bg-[#F5F4F2] flex items-center justify-center text-[#6B7280] hover:bg-[#EBEBEB]">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="max-h-[380px] overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-5 h-5 border-2 border-[#C84B31] border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4">
+            <div className="w-12 h-12 rounded-full bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center mb-3">
+              <Bell className="w-5 h-5 text-[#9CA3AF]" />
+            </div>
+            <p className="text-[13px] font-semibold text-[#1A1A1A]">No notifications</p>
+            <p className="text-[11px] text-[#9CA3AF] mt-1 text-center">You're all caught up! Check back later.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-[#EBEBEB]">
+            {notifications.map((n) => {
+              const isPending = n.type === 'pending_approval';
+              const href = isPending
+                ? `/admin/providers?tab=pending`
+                : `/admin/bookings`;
+              return (
+                <button
+                  key={n.id}
+                  onClick={() => { onClose(); onNavigate(href); }}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-[#FFF0EC]/50 transition-colors text-left"
+                >
+                  <div className={cn(
+                    'w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 mt-0.5',
+                    isPending
+                      ? 'bg-amber-50 border-amber-100'
+                      : 'bg-[#FFF0EC] border-[#FDDDD5]',
+                  )}>
+                    {isPending
+                      ? <UserCheck className="w-4 h-4 text-amber-600" />
+                      : <CalendarPlus className="w-4 h-4 text-[#C84B31]" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-semibold text-[#1A1A1A]">{n.title}</p>
+                    <p className="text-[11px] text-[#6B7280] mt-0.5 leading-snug line-clamp-2">{n.message}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface AdminLayoutProps {
@@ -131,6 +207,37 @@ export default function AdminLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [adminName, setAdminName]   = useState('Super Admin');
   const [adminEmail, setAdminEmail] = useState('');
+
+  // Notifications
+  const [bellOpen, setBellOpen]             = useState(false);
+  const [notifications, setNotifications]   = useState<Notification[]>([]);
+  const [notifLoading, setNotifLoading]     = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  const openBell = () => {
+    setBellOpen((prev) => {
+      if (!prev) {
+        setNotifLoading(true);
+        adminAPI.getNotifications()
+          .then(({ data }) => setNotifications(data))
+          .catch(() => setNotifications([]))
+          .finally(() => setNotifLoading(false));
+      }
+      return !prev;
+    });
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!bellOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setBellOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [bellOpen]);
 
   // Fetch real admin name + email from Firebase
   useEffect(() => {
@@ -272,10 +379,28 @@ export default function AdminLayout({
           <div className="flex items-center gap-3">
             {topBarRight}
             {showBell && (
-              <button className="relative w-9 h-9 rounded-full bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-[#EBEBEB] transition-colors">
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-white" />
-              </button>
+              <div className="relative" ref={bellRef}>
+                <button
+                  onClick={openBell}
+                  className="relative w-9 h-9 rounded-full bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-[#EBEBEB] transition-colors"
+                >
+                  <Bell className="w-4 h-4" />
+                  {notifications.length > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-white" />
+                  )}
+                  {notifications.length === 0 && !bellOpen && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-white" />
+                  )}
+                </button>
+                {bellOpen && (
+                  <NotificationPanel
+                    notifications={notifications}
+                    loading={notifLoading}
+                    onClose={() => setBellOpen(false)}
+                    onNavigate={navigate}
+                  />
+                )}
+              </div>
             )}
             <div className="h-6 w-px bg-[#EBEBEB]" />
             <div className="flex items-center gap-2.5">
@@ -304,10 +429,25 @@ export default function AdminLayout({
           </div>
           <div className="flex items-center gap-2">
             {showBell && (
-              <button className="relative w-9 h-9 rounded-full bg-white/8 flex items-center justify-center text-[#9CA3AF]">
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-[#1C1917]" />
-              </button>
+              <div className="relative" ref={bellRef}>
+                <button
+                  onClick={openBell}
+                  className="relative w-9 h-9 rounded-full bg-white/8 flex items-center justify-center text-[#9CA3AF]"
+                >
+                  <Bell className="w-4 h-4" />
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-[#1C1917]" />
+                </button>
+                {bellOpen && (
+                  <div className="fixed left-4 right-4 top-16 z-50">
+                    <NotificationPanel
+                      notifications={notifications}
+                      loading={notifLoading}
+                      onClose={() => setBellOpen(false)}
+                      onNavigate={navigate}
+                    />
+                  </div>
+                )}
+              </div>
             )}
             <button
               onClick={() => setMobileMenuOpen(true)}
