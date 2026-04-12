@@ -1,0 +1,9 @@
+amarago-f0dc7-firebase-adminsdk-fbsvc-f6e6af3fbb.json
+*.json
+.env
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
