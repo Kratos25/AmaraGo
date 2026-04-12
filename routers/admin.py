@@ -8,9 +8,10 @@ Admin dashboard router  —  GET /admin/dashboard
 
 from __future__ import annotations
 
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, List
 
 from firebase_config import get_db
 from dependencies.auth import CurrentUser, require_role
@@ -28,8 +29,16 @@ class DashboardStats(BaseModel):
     total_bookings: int = 0
     completed_bookings: int = 0
     pending_bookings: int = 0
+    active_bookings: int = 0
     total_revenue: float = 0.0
     pending_provider_approvals: int = 0
+    # Weekly breakdown (last 7 calendar days, oldest → newest)
+    weekly_revenue: List[float] = []
+    weekly_bookings: List[int] = []
+    weekly_labels: List[str] = []
+    # Platform health (0–100)
+    booking_completion_rate: float = 0.0
+    provider_fill_rate: float = 0.0
 
 
 @router.get("/dashboard", response_model=DashboardStats)
@@ -37,39 +46,75 @@ async def get_dashboard(
     _admin: CurrentUser = Depends(require_role("admin")),
 ):
     db = get_db()
+    now = datetime.now(timezone.utc)
 
-    # Count providers
-    all_providers = db.collection("provider_profiles").stream()
+    # ── Providers ────────────────────────────────────────────────────────────
     active_providers = 0
     pending_approvals = 0
-    for doc in all_providers:
+    for doc in db.collection("provider_profiles").stream():
         d = doc.to_dict()
         if d.get("is_approved"):
             active_providers += 1
         else:
             pending_approvals += 1
 
-    # Count clients
-    client_docs = (
-        db.collection("users").where("role", "==", "client").stream()
+    # ── Clients ──────────────────────────────────────────────────────────────
+    verified_clients = sum(
+        1 for _ in db.collection("users").where("role", "==", "client").stream()
     )
-    verified_clients = sum(1 for _ in client_docs)
 
-    # Booking stats
-    booking_docs = db.collection("bookings").stream()
+    # ── Bookings (single pass — weekly + health metrics) ─────────────────────
+    weekly_revenue  = [0.0] * 7
+    weekly_bookings = [0]   * 7
+    weekly_labels   = [
+        (now - timedelta(days=i)).strftime("%a") for i in range(6, -1, -1)
+    ]
+
     total_bookings = 0
-    completed = 0
-    pending = 0
-    revenue = 0.0
-    for doc in booking_docs:
+    completed      = 0
+    pending        = 0
+    active         = 0
+    revenue        = 0.0
+    assigned       = 0   # bookings with a provider assigned
+
+    for doc in db.collection("bookings").stream():
         total_bookings += 1
         d = doc.to_dict()
         s = d.get("status", "")
+
         if s == "completed":
             completed += 1
-            revenue += d.get("total_price", 0)
+            revenue += float(d.get("total_price", 0))
         elif s == "pending":
             pending += 1
+        elif s in ("confirmed", "active"):
+            active += 1
+
+        if d.get("provider_id"):
+            assigned += 1
+
+        # Weekly grouping by created_at
+        created_raw = d.get("created_at", "")
+        if created_raw:
+            try:
+                created = datetime.fromisoformat(
+                    str(created_raw).replace("Z", "+00:00")
+                )
+                days_ago = (now.date() - created.date()).days
+                if 0 <= days_ago <= 6:
+                    idx = 6 - days_ago
+                    weekly_bookings[idx] += 1
+                    if s == "completed":
+                        weekly_revenue[idx] += float(d.get("total_price", 0))
+            except (ValueError, TypeError, AttributeError):
+                pass
+
+    booking_completion_rate = (
+        round(completed / total_bookings * 100, 1) if total_bookings else 0.0
+    )
+    provider_fill_rate = (
+        round(assigned / total_bookings * 100, 1) if total_bookings else 0.0
+    )
 
     return DashboardStats(
         active_providers=active_providers,
@@ -77,8 +122,14 @@ async def get_dashboard(
         total_bookings=total_bookings,
         completed_bookings=completed,
         pending_bookings=pending,
+        active_bookings=active,
         total_revenue=round(revenue, 2),
         pending_provider_approvals=pending_approvals,
+        weekly_revenue=[round(x, 2) for x in weekly_revenue],
+        weekly_bookings=weekly_bookings,
+        weekly_labels=weekly_labels,
+        booking_completion_rate=booking_completion_rate,
+        provider_fill_rate=provider_fill_rate,
     )
 
 
