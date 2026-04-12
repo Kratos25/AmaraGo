@@ -247,10 +247,11 @@ async def get_notifications(
     notifications: list[Notification] = []
 
     # New / unassigned bookings (pending status = needs provider)
+    # Note: order_by + where on different fields requires a composite index,
+    # so we fetch and sort in Python instead.
     pending_bookings = (
         db.collection("bookings")
         .where("status", "==", "pending")
-        .order_by("created_at", direction="DESCENDING")
         .limit(20)
         .stream()
     )
@@ -284,4 +285,9 @@ async def get_notifications(
             created_at=created_at,
         ))
 
+    # Sort newest-first in Python (avoids composite index requirement)
+    notifications.sort(
+        key=lambda n: (n.created_at.isoformat() if hasattr(n.created_at, "isoformat") else str(n.created_at or "")),
+        reverse=True,
+    )
     return notifications
