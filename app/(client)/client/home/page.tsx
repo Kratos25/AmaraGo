@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { authAPI, couponsAPI, categoriesAPI, packagesAPI, servicesAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface Coupon {
@@ -28,61 +29,6 @@ interface Coupon {
   active: boolean;
 }
 
-const categories = [
-  { name: 'Hair Care', icon: '✂️' },
-  { name: 'Skin Care', icon: '🧴' },
-  { name: 'Makeup', icon: '💄' },
-  { name: 'Nail Art', icon: '💅' },
-  { name: 'Spa & Massage', icon: '🧖‍♀️' },
-  { name: 'Waxing', icon: '🪒' },
-];
-
-const packages = [
-  {
-    name: 'Bridal Glow Package',
-    desc: 'Full body massage + facial + hair spa + makeup trial',
-    time: '5 hours',
-    price: '₹12,999',
-    image: 'https://ciceroni.in/cdn/shop/articles/top-12-bridal-makeup-artists-to-look-out-for-in-ahmedabad-480982.png?v=1683890124&width=748',
-  },
-  {
-    name: 'Luxury Spa Day',
-    desc: 'Aroma therapy + body polish + signature facial',
-    time: '4 hours',
-    price: '₹8,499',
-    image: 'https://colorcafe.co.in/frontend/images/blogs/1728562931_6707c6f331796.png',
-  },
-];
-
-const popularServices = [
-  {
-    name: 'Classic Haircut + Blow Dry',
-    duration: '60 min',
-    rating: 4.8,
-    originalPrice: '₹1,200',
-    discountedPrice: '₹899',
-    discount: '25% OFF',
-    image: 'https://thumbs.dreamstime.com/b/woman-getting-her-hair-done-beauty-salon-attractive-women-116104766.jpg',
-  },
-  {
-    name: 'HydraFacial Signature',
-    duration: '75 min',
-    rating: 4.9,
-    originalPrice: '₹4,500',
-    discountedPrice: '₹3,299',
-    discount: '27% OFF',
-    image: 'https://ladybellemedspa.com/storage/2025/08/HydraFacial-treatment-at-LadyBelle-Med-Spa-in-Fountain-Valley-CA.webp',
-  },
-  {
-    name: 'Gel Nail Extension',
-    duration: '120 min',
-    rating: 4.7,
-    originalPrice: '₹2,800',
-    discountedPrice: '₹2,099',
-    discount: '25% OFF',
-    image: 'https://www.byrdie.com/thmb/COwCfKYihOvoMxUz1TYS71DCMjg=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/wintergelnails6-6ebee2208d894784bd3b1d4232c148b0.png',
-  },
-];
 
 const ALL_SERVICES = [
   { id: 'haircut', label: 'Haircut', category: 'Hair Care' },
@@ -152,28 +98,22 @@ function ProviderRegistrationModal({
     }
     setSubmitting(true);
     try {
-      await setDoc(
-        doc(db, 'users', user.uid),
-        {
-          isProvider: true,
-          role: 'provider',
-          providerProfile: {
-            fullName,
-            phone,
-            bio,
-            experience,
-            address,
-            services: selectedServices,
-            registeredAt: serverTimestamp(),
-            status: 'active',
-          },
-        },
-        { merge: true }
-      );
-      toast({ title: 'Provider registration complete! 🎉', description: 'You can now access your provider dashboard.' });
+      const token = await user.getIdToken();
+      await authAPI.registerProvider({
+        name: fullName,
+        email: user.email ?? '',
+        phone,
+        firebase_uid: user.uid,
+        id_token: token,
+        bio,
+        experience_years: parseInt(experience) || 0,
+        services_offered: selectedServices,
+        location: address,
+      });
+      toast({ title: 'Provider registration complete! 🎉', description: 'Awaiting admin approval. You can access your provider dashboard now.' });
       onSuccess();
     } catch (err: any) {
-      toast({ title: 'Registration failed', description: err.message, variant: 'destructive' });
+      toast({ title: 'Registration failed', description: err?.response?.data?.detail ?? err.message, variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
@@ -320,18 +260,68 @@ export default function Home() {
   const [couponsLoading, setCouponsLoading] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const fetchCoupons = async (user: User) => {
+  // Categories, packages, popular services from API
+  const [categories, setCategories] = useState<{ name: string; icon: string }[]>([]);
+  const [packages, setPackages] = useState<{ id: string; name: string; desc: string; time: string; price: string }[]>([]);
+  const [popularServices, setPopularServices] = useState<{ id: string; name: string; duration: string; rating: number; discountedPrice: string; originalPrice: string; discount: string }[]>([]);
+
+  useEffect(() => {
+    categoriesAPI.list()
+      .then(({ data }) => setCategories(data.filter((c) => c.active).map((c) => ({ name: c.name, icon: c.icon || '✨' }))))
+      .catch(() => {});
+
+    packagesAPI.list()
+      .then(({ data }) => setPackages(
+        data.filter((p) => p.active).map((p) => ({
+          id: p.id,
+          name: p.name,
+          desc: p.tagline ?? '',
+          time: p.duration ?? '',
+          price: `₹${p.price.toLocaleString('en-IN')}`,
+        }))
+      ))
+      .catch(() => {});
+
+    servicesAPI.list({ popular: true, active: true })
+      .then(({ data }) => setPopularServices(
+        data.map((s) => {
+          const base = s.base_price;
+          const disc = s.discounted_price ?? base;
+          const discPct = base > disc ? Math.round(((base - disc) / base) * 100) : 0;
+          return {
+            id: s.id,
+            name: s.name,
+            duration: `${s.duration} min`,
+            rating: s.rating ?? 0,
+            discountedPrice: `₹${disc.toLocaleString('en-IN')}`,
+            originalPrice: `₹${base.toLocaleString('en-IN')}`,
+            discount: discPct > 0 ? `${discPct}% OFF` : '',
+          };
+        })
+      ))
+      .catch(() => {});
+  }, []);
+
+  const fetchCoupons = async (_user: User) => {
     setCouponsLoading(true);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/v1/coupons/available`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (res.ok) {
-        const data: Coupon[] = await res.json();
-        setCoupons(data);
-      }
+      const { data } = await couponsAPI.listActive();
+      setCoupons(data.map((c) => ({
+        id: c.id,
+        code: c.code,
+        description: c.description,
+        type: c.type,
+        value: c.value,
+        minOrder: c.min_order,
+        maxDiscount: c.max_discount,
+        usageLimit: c.usage_limit,
+        usedCount: c.used_count,
+        validFrom: c.valid_from,
+        validTo: c.valid_to,
+        applicableFor: c.applicable_for,
+        autoApply: c.auto_apply,
+        active: c.active,
+      })));
     } catch {
       // silently fail — coupon section just won't show
     } finally {
@@ -352,11 +342,11 @@ export default function Home() {
       if (user) {
         try {
           const snap = await getDoc(doc(db, 'users', user.uid));
-          setIsProvider(snap.exists() && snap.data()?.isProvider === true);
+          const role = snap.data()?.role;
+          setIsProvider(role === 'service_provider');
         } catch {
           setIsProvider(false);
         }
-        // Fetch personalised coupons now that we have the user
         fetchCoupons(user);
       } else {
         setIsProvider(false);
@@ -544,8 +534,10 @@ export default function Home() {
           <h3 className="text-lg font-semibold mb-5 text-gray-800">Special Packages</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {packages.map((pkg) => (
-              <div key={pkg.name} className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-xl transition-all duration-300 overflow-hidden">
-                <img src={pkg.image} alt={pkg.name} className="w-full h-60 object-cover transition-transform duration-500 hover:scale-105" loading="lazy" />
+              <div key={pkg.id} className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-xl transition-all duration-300 overflow-hidden">
+                <div className="w-full h-40 bg-gradient-to-br from-[#fce7ef] to-[#f9d0db] flex items-center justify-center text-6xl">
+                  ✨
+                </div>
                 <div className="p-6">
                   <h4 className="font-bold text-xl mb-3 text-gray-900">{pkg.name}</h4>
                   <p className="text-gray-600 text-sm mb-5 leading-relaxed">{pkg.desc}</p>
@@ -566,26 +558,34 @@ export default function Home() {
           <h3 className="text-lg font-semibold mb-5 text-gray-800">Popular Services</h3>
           <div className="space-y-6">
             {popularServices.map((service) => (
-              <div key={service.name} className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300 overflow-hidden">
+              <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300 overflow-hidden">
                 <div className="flex flex-col sm:flex-row gap-6 p-4 sm:p-6">
-                  <div className="rounded-2xl overflow-hidden flex-shrink-0">
-                    <img src={service.image} alt={service.name} className="w-full sm:w-32 sm:h-32 lg:w-40 lg:h-40 object-cover transition-transform duration-500 hover:scale-105" loading="lazy" />
+                  <div className="rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-[#fce7ef] to-[#f9d0db] w-full sm:w-32 sm:h-32 lg:w-40 lg:h-40 flex items-center justify-center text-5xl">
+                    💅
                   </div>
                   <div className="flex-1 flex flex-col justify-between">
                     <div>
                       <h4 className="font-semibold text-lg mb-2">{service.name}</h4>
                       <div className="flex items-center gap-5 text-sm text-gray-600 mb-4">
                         <div className="flex items-center gap-1"><Clock size={16} /> {service.duration}</div>
-                        <div className="flex items-center gap-1"><Star size={16} className="text-amber-500 fill-amber-500" /> {service.rating}</div>
+                        {service.rating > 0 && (
+                          <div className="flex items-center gap-1"><Star size={16} className="text-amber-500 fill-amber-500" /> {service.rating}</div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-baseline gap-3">
                       <div className="text-2xl font-bold text-[#e5849c]">{service.discountedPrice}</div>
-                      <div className="text-sm text-gray-500 line-through">{service.originalPrice}</div>
+                      {service.discount && <div className="text-sm text-gray-500 line-through">{service.originalPrice}</div>}
+                      {service.discount && <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{service.discount}</span>}
                     </div>
                   </div>
                   <div className="sm:self-end">
-                    <Button className="bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white px-8 py-6 w-full sm:w-auto">Book</Button>
+                    <Button
+                      onClick={() => router.push(`/client/services/${service.id}`)}
+                      className="bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white px-8 py-6 w-full sm:w-auto"
+                    >
+                      Book
+                    </Button>
                   </div>
                 </div>
               </div>

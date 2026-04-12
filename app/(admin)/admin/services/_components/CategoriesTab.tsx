@@ -1,38 +1,48 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, Edit3, Trash2, Check, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
-import {
-  Category, SEED_CATEGORIES,
-  InlineInput, Toggle,
-} from './shared';
+import { categoriesAPI, Category } from '@/lib/api';
+import { InlineInput, Toggle } from './shared';
 
 export default function CategoriesTab() {
   const { toast } = useToast();
-  const [categories, setCategories] = useState<Category[]>(SEED_CATEGORIES);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading]       = useState(true);
   const [adding, setAdding]         = useState(false);
   const [editId, setEditId]         = useState<string | null>(null);
   const [draft, setDraft]           = useState({ name: '', icon: '', description: '' });
 
+  useEffect(() => {
+    categoriesAPI.list()
+      .then((res) => setCategories(res.data))
+      .catch(() => toast({ title: 'Failed to load categories', variant: 'destructive' }))
+      .finally(() => setLoading(false));
+  }, []);
+
   const resetDraft = () => setDraft({ name: '', icon: '', description: '' });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!draft.name.trim()) return;
-    if (editId) {
-      setCategories((p) => p.map((c) => c.id === editId ? { ...c, ...draft } : c));
-      toast({ title: 'Category updated' });
-      setEditId(null);
-    } else {
-      setCategories((p) => [...p, {
-        id: `cat${Date.now()}`, ...draft, serviceCount: 0, active: true,
-      }]);
-      toast({ title: 'Category added ✓' });
-      setAdding(false);
+    try {
+      if (editId) {
+        const res = await categoriesAPI.update(editId, draft);
+        setCategories((p) => p.map((c) => c.id === editId ? res.data : c));
+        toast({ title: 'Category updated' });
+        setEditId(null);
+      } else {
+        const res = await categoriesAPI.create({ ...draft, active: true });
+        setCategories((p) => [...p, res.data]);
+        toast({ title: 'Category added ✓' });
+        setAdding(false);
+      }
+      resetDraft();
+    } catch {
+      toast({ title: 'Failed to save category', variant: 'destructive' });
     }
-    resetDraft();
   };
 
   const startEdit = (cat: Category) => {
@@ -41,10 +51,26 @@ export default function CategoriesTab() {
     setAdding(false);
   };
 
-  const handleDelete = (id: string) => {
-    setCategories((p) => p.filter((c) => c.id !== id));
-    toast({ title: 'Category removed' });
+  const handleDelete = async (id: string) => {
+    try {
+      await categoriesAPI.delete(id);
+      setCategories((p) => p.filter((c) => c.id !== id));
+      toast({ title: 'Category removed' });
+    } catch {
+      toast({ title: 'Failed to delete category', variant: 'destructive' });
+    }
   };
+
+  const handleToggleActive = async (cat: Category, value: boolean) => {
+    try {
+      const res = await categoriesAPI.update(cat.id, { active: value });
+      setCategories((p) => p.map((c) => c.id === cat.id ? res.data : c));
+    } catch {
+      toast({ title: 'Failed to update category', variant: 'destructive' });
+    }
+  };
+
+  if (loading) return <p className="text-[13px] text-[#9CA3AF] py-8 text-center">Loading categories…</p>;
 
   return (
     <div className="space-y-4">
@@ -90,13 +116,13 @@ export default function CategoriesTab() {
                 <div className="w-12 h-12 rounded-2xl bg-[#FFF0EC] border border-[#FDDDD5] flex items-center justify-center text-2xl shrink-0">
                   {cat.icon}
                 </div>
-                <Toggle checked={cat.active} onChange={(v) => setCategories((p) => p.map((c) => c.id === cat.id ? { ...c, active: v } : c))} />
+                <Toggle checked={cat.active} onChange={(v) => handleToggleActive(cat, v)} />
               </div>
               <h3 className="font-bold text-[14px] text-[#1A1A1A] mb-0.5">{cat.name}</h3>
               <p className="text-[11px] text-[#9CA3AF] mb-3 leading-snug">{cat.description}</p>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-[#6B7280] bg-[#F5F4F2] border border-[#EBEBEB] px-2 py-0.5 rounded-full">
-                  {cat.serviceCount} services
+                  {cat.service_count} services
                 </span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => startEdit(cat)} className="w-7 h-7 rounded-lg bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-[#FFF0EC] hover:text-[#C84B31] transition-colors">

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { usersAPI } from "@/lib/api";
 
 type MenuItemType = {
   icon: React.ReactNode;
@@ -36,20 +37,47 @@ export default function Profile() {
   const { user } = useAuth();
   const [isEditing, setIsEditing]     = useState(false);
   const [name, setName]               = useState(user?.displayName ?? 'User');
-  const [phone, setPhone]             = useState('+91 98765 43210');
+  const [phone, setPhone]             = useState('');
   const email                         = user?.email ?? '';
   const photoURL                      = user?.photoURL ?? null;
   const [editName, setEditName]       = useState(name);
   const [editPhone, setEditPhone]     = useState(phone);
   const [notifications, setNotifs]    = useState(true);
+  const [saving, setSaving]           = useState(false);
 
-  // Sync name once Firebase auth resolves (user is null on first render)
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await usersAPI.updateMe({ name: editName, phone: editPhone });
+      setName(editName);
+      setPhone(editPhone);
+      setIsEditing(false);
+    } catch {
+      // fail silently — local state still updated
+      setName(editName);
+      setPhone(editPhone);
+      setIsEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (user?.displayName) {
       setName(user.displayName);
       setEditName(user.displayName);
     }
   }, [user]);
+
+  // Fetch phone from backend profile
+  useEffect(() => {
+    usersAPI.getMe()
+      .then(({ data }) => {
+        if (data.phone) { setPhone(data.phone); setEditPhone(data.phone); }
+        if (data.name)  { setName(data.name);   setEditName(data.name);   }
+      })
+      .catch(() => {});
+  }, []);
 
   const loyaltyPoints  = 1240;
   const nextTierPoints = 2000;
@@ -480,8 +508,12 @@ export default function Profile() {
                 </div>
               </div>
 
-              <button className="save-btn" onClick={() => { setName(editName); setPhone(editPhone); setIsEditing(false); }}>
-                <Check size={17} /> Save Changes
+              <button className="save-btn" onClick={handleSave} disabled={saving}>
+                {saving
+                  ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  : <Check size={17} />
+                }
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>

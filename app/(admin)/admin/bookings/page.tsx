@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search, MapPin, Clock, ChevronRight, CalendarCheck,
@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
 import AdminLayout from '../_components/AdminLayout';
+import { bookingsAPI, type Booking as APIBooking } from '@/lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,100 +43,37 @@ interface Booking {
   cancelReason?: string;
 }
 
-// ─── Mock data ───────────────────────────────────────────────────────────────
+// ─── API → local shape mapper ─────────────────────────────────────────────────
 
-const ALL_BOOKINGS: Booking[] = [
-  {
-    id: 'b1', bookingRef: 'GLM-001247',
-    client: 'Ananya Singh', clientEmoji: '👩', clientPhone: '+91 98765 10001',
-    provider: 'Meera Patel', providerEmoji: '👩‍🦰',
-    service: 'Gold Facial', category: 'Skin Care',
-    location: 'Bandra West, Mumbai',
-    scheduledDate: 'Today', scheduledTime: '3:45 PM', duration: '60 min',
-    amount: 1599, platformFee: 240, providerEarning: 1359,
-    status: 'completed', createdAt: 'Today, 2:00 PM', rating: 5,
-  },
-  {
-    id: 'b2', bookingRef: 'GLM-001246',
-    client: 'Priya Mehta', clientEmoji: '👩‍🦱', clientPhone: '+91 98765 10002',
-    provider: 'Riya Sharma', providerEmoji: '👩‍🦱',
-    service: 'Party Makeup', category: 'Makeup',
-    location: 'Juhu, Mumbai',
-    scheduledDate: 'Today', scheduledTime: '6:00 PM', duration: '90 min',
-    amount: 1999, platformFee: 300, providerEarning: 1699,
-    status: 'in_progress', createdAt: 'Today, 11:00 AM',
-  },
-  {
-    id: 'b3', bookingRef: 'GLM-001245',
-    client: 'Sneha Reddy', clientEmoji: '👰', clientPhone: '+91 98765 10003',
-    provider: 'Sunita Verma', providerEmoji: '🧖‍♀️',
-    service: 'Bridal Makeup', category: 'Bridal',
-    location: 'Powai, Mumbai',
-    scheduledDate: 'Tomorrow', scheduledTime: '10:00 AM', duration: '180 min',
-    amount: 4999, platformFee: 750, providerEarning: 4249,
-    status: 'confirmed', createdAt: 'Today, 9:30 AM',
-  },
-  {
-    id: 'b4', bookingRef: 'GLM-001244',
-    client: 'Divya Nair', clientEmoji: '🧖‍♀️', clientPhone: '+91 98765 10004',
-    provider: 'Searching…', providerEmoji: '🔍',
-    service: 'Hair Spa', category: 'Hair Care',
-    location: 'Dadar, Mumbai',
-    scheduledDate: 'Today', scheduledTime: '7:00 PM', duration: '75 min',
-    amount: 999, platformFee: 150, providerEarning: 849,
-    status: 'searching', createdAt: 'Today, 5:00 PM',
-  },
-  {
-    id: 'b5', bookingRef: 'GLM-001243',
-    client: 'Meghna Kulkarni', clientEmoji: '💅', clientPhone: '+91 98765 10005',
-    provider: 'Priya Nair', providerEmoji: '💅',
-    service: 'Nail Art', category: 'Nail',
-    location: 'Worli, Mumbai',
-    scheduledDate: 'Yesterday', scheduledTime: '4:00 PM', duration: '45 min',
-    amount: 699, platformFee: 105, providerEarning: 594,
-    status: 'completed', createdAt: 'Yesterday, 1:00 PM', rating: 4,
-  },
-  {
-    id: 'b6', bookingRef: 'GLM-001242',
-    client: 'Kavita Shah', clientEmoji: '👩‍🦳', clientPhone: '+91 98765 10006',
-    provider: 'Sunita Verma', providerEmoji: '🧖‍♀️',
-    service: 'Body Massage', category: 'Spa',
-    location: 'Malad West, Mumbai',
-    scheduledDate: 'Dec 28', scheduledTime: '11:00 AM', duration: '90 min',
-    amount: 2499, platformFee: 375, providerEarning: 2124,
-    status: 'confirmed', createdAt: 'Today, 8:00 AM',
-  },
-  {
-    id: 'b7', bookingRef: 'GLM-001241',
-    client: 'Ritu Sharma', clientEmoji: '👩‍🦰', clientPhone: '+91 98765 10007',
-    provider: 'Meera Patel', providerEmoji: '👩‍🦰',
-    service: 'Party Makeup', category: 'Makeup',
-    location: 'Andheri East, Mumbai',
-    scheduledDate: 'Dec 26', scheduledTime: '5:00 PM', duration: '90 min',
-    amount: 1999, platformFee: 300, providerEarning: 1699,
-    status: 'cancelled', createdAt: 'Dec 25', cancelReason: 'Client requested cancellation',
-  },
-  {
-    id: 'b8', bookingRef: 'GLM-001240',
-    client: 'Pooja Verma', clientEmoji: '🧑‍🦱', clientPhone: '+91 98765 10008',
-    provider: 'Kavita M.', providerEmoji: '💄',
-    service: 'HydraFacial', category: 'Skin Care',
-    location: 'Borivali, Mumbai',
-    scheduledDate: 'Dec 25', scheduledTime: '2:00 PM', duration: '75 min',
-    amount: 3299, platformFee: 495, providerEarning: 2804,
-    status: 'completed', createdAt: 'Dec 24', rating: 5,
-  },
-  {
-    id: 'b9', bookingRef: 'GLM-001239',
-    client: 'Sonia Kapoor', clientEmoji: '😤', clientPhone: '+91 98765 10009',
-    provider: 'Riya Sharma', providerEmoji: '👩‍🦱',
-    service: 'Hair Styling', category: 'Hair Care',
-    location: 'Santacruz, Mumbai',
-    scheduledDate: 'Dec 24', scheduledTime: '3:00 PM', duration: '60 min',
-    amount: 899, platformFee: 135, providerEarning: 764,
-    status: 'cancelled', createdAt: 'Dec 23', cancelReason: 'Provider unavailable',
-  },
-];
+function mapBooking(b: APIBooking): Booking {
+  const statusMap: Record<string, BookingStatus> = {
+    pending:   'searching',
+    confirmed: 'confirmed',
+    active:    'in_progress',
+    completed: 'completed',
+    cancelled: 'cancelled',
+  };
+  return {
+    id:              b.id,
+    bookingRef:      b.id.substring(0, 8).toUpperCase(),
+    client:          b.client_name ?? 'Unknown',
+    clientEmoji:     '👤',
+    clientPhone:     b.client_phone ?? '',
+    provider:        b.provider_name ?? 'Searching…',
+    providerEmoji:   b.provider_id ? '✨' : '🔍',
+    service:         b.service_name ?? 'Service',
+    category:        '',
+    location:        b.address ?? '',
+    scheduledDate:   b.date,
+    scheduledTime:   b.time,
+    duration:        '',
+    amount:          b.total_price,
+    platformFee:     b.convenience_fee ?? 0,
+    providerEarning: b.total_price - (b.convenience_fee ?? 0),
+    status:          (statusMap[b.status] ?? 'searching') as BookingStatus,
+    createdAt:       b.created_at ?? '',
+  };
+}
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -408,13 +346,17 @@ export default function AdminBookings() {
   const router    = useRouter();
   const { toast } = useToast();
 
-  const [bookings, setBookings]       = useState<Booking[]>(ALL_BOOKINGS);
+  const [bookings, setBookings]       = useState<Booking[]>([]);
   const [activeTab, setActiveTab]     = useState<TabKey>('all');
   const [search, setSearch]           = useState('');
   const [sortBy, setSortBy]           = useState<'recent' | 'amount_high' | 'amount_low' | 'date'>('recent');
   const [viewMode, setViewMode]       = useState<'card' | 'table'>('card');
   const [showFilters, setShowFilters] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('All');
+
+  useEffect(() => {
+    bookingsAPI.list().then(({ data }) => setBookings(data.map(mapBooking))).catch(() => {});
+  }, []);
 
   // Counts
   const counts: Record<TabKey, number> = useMemo(() => ({

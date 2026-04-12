@@ -347,8 +347,9 @@ import {
   sendPasswordResetEmail,
   User,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import { authAPI } from "@/lib/api";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -361,14 +362,13 @@ import { FcGoogle } from "react-icons/fc";
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "admin@amarago.com";
 
 async function getRedirectPath(user: User): Promise<string> {
-  // Admin check — hardcoded email always goes to admin
   if (user.email === ADMIN_EMAIL) return "/admin";
-
-  // Check Firestore for provider role
   try {
     const snap = await getDoc(doc(db, "users", user.uid));
-    if (snap.exists() && snap.data()?.isProvider === true) {
-      return "/provider";
+    if (snap.exists()) {
+      const role = snap.data()?.role;
+      if (role === "admin") return "/admin";
+      if (role === "service_provider") return "/provider";
     }
   } catch {
     // fallback to client if Firestore fails
@@ -458,15 +458,13 @@ export default function AuthPage() {
       const token = await user.getIdToken();
       await setSessionCookie(token);
 
-      // Save full user doc to Firestore — must await before redirecting
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        email: user.email,
-        name: name,
-        phone: phone,
-        isProvider: false,
-        role: 'client',
-        createdAt: serverTimestamp(),
+      // Register user profile in backend (idempotent — safe to call on every register)
+      await authAPI.registerClient({
+        name,
+        email: user.email ?? email,
+        phone,
+        firebase_uid: user.uid,
+        id_token: token,
       });
 
       toast({ title: 'Account created!', description: 'Welcome to AmaraGo.' });
@@ -494,17 +492,15 @@ export default function AuthPage() {
       const token = await user.getIdToken();
       await setSessionCookie(token);
 
-      // Create user doc if it doesn't exist yet (first Google login)
-      const userRef = doc(db, "users", user.uid);
-      const snap = await getDoc(userRef);
-      if (!snap.exists()) {
-        await setDoc(userRef, {
-          uid: user.uid,
-          email: user.email,
+      // Register in backend if first time (idempotent — backend checks existence)
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+      if (!userSnap.exists()) {
+        await authAPI.registerClient({
           name: user.displayName ?? "",
-          isProvider: false,
-          role: "client",
-          createdAt: serverTimestamp(),
+          email: user.email ?? "",
+          phone: "",
+          firebase_uid: user.uid,
+          id_token: token,
         });
       }
 

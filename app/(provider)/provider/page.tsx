@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/app/lib/utils';
 import ProviderLayout from './_components/ProviderLayout';
+import { providersAPI, bookingsAPI, type ProviderProfile, type Booking, type EarningsSummary } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,19 +133,43 @@ function CountdownBar({ seconds = 15 }: { seconds?: number }) {
 
 export default function SPDashboard() {
   const router = useRouter();
+  const [profile, setProfile] = useState<ProviderProfile | null>(null);
+  const [myJobs, setMyJobs] = useState<Booking[]>([]);
+  const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
+
+  useEffect(() => {
+    providersAPI.getMyProfile().then(({ data }) => setProfile(data)).catch(() => {});
+    providersAPI.getMyJobs().then(({ data }) => setMyJobs(data.slice(0, 5))).catch(() => {});
+    providersAPI.getMyEarnings().then(({ data }) => setEarnings(data)).catch(() => {});
+  }, []);
 
   const stats: StatItem[] = [
-    { label: "Today's Earnings", value: '₹2,450', Icon: Wallet,   trend: '+12%', trendUp: true },
-    { label: 'Jobs Completed',   value: '156',    Icon: Briefcase, trend: '+8%',  trendUp: true },
-    { label: 'Avg Rating',       value: '4.9',    Icon: Award,
-      sub: <span className="text-amber-400 text-[12px]">★★★★★</span> },
+    {
+      label: "Today's Earnings",
+      value: earnings ? `₹${earnings.this_week.toLocaleString('en-IN')}` : '₹0',
+      Icon: Wallet, trend: '', trendUp: true,
+    },
+    {
+      label: 'Jobs Completed',
+      value: profile ? String(profile.total_jobs) : '0',
+      Icon: Briefcase, trend: '', trendUp: true,
+    },
+    {
+      label: 'Avg Rating',
+      value: profile ? String(profile.rating || '—') : '—',
+      Icon: Award,
+      sub: profile?.rating ? <span className="text-amber-400 text-[12px]">★★★★★</span> : null,
+    },
   ];
 
-  const jobs: Job[] = [
-    { id: '1', service: 'Gold Facial',   client: 'Ananya S.', time: '2:00 PM', status: 'upcoming', icon: '✨' },
-    { id: '2', service: 'Hair Spa',      client: 'Priya M.',  time: '4:30 PM', status: 'upcoming', icon: '💆‍♀️' },
-    { id: '3', service: 'Bridal Makeup', client: 'Sneha R.',  time: '6:00 PM', status: 'active',   icon: '💄' },
-  ];
+  const jobs: Job[] = myJobs.map((b) => ({
+    id: b.id,
+    service: b.service_name ?? 'Service',
+    client: b.client_name ?? 'Client',
+    time: b.time,
+    status: (b.status === 'active' ? 'active' : 'upcoming') as 'upcoming' | 'active' | 'completed',
+    icon: '✨',
+  }));
 
   const quickActions = [
     { label: 'Earnings',   path: '/provider/earnings', Icon: Wallet },
@@ -172,7 +197,9 @@ export default function SPDashboard() {
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="text-[10px] font-bold text-[#9CA3AF] tracking-widest uppercase">Weekly Total</span>
                   </div>
-                  <p className="font-bold text-[22px] text-[#1A1A1A] tracking-tight leading-tight">&#8377;14,820</p>
+                  <p className="font-bold text-[22px] text-[#1A1A1A] tracking-tight leading-tight">
+                    ₹{earnings ? earnings.this_week.toLocaleString('en-IN') : '0'}
+                  </p>
                   <div className="flex items-center gap-1 mt-1.5 text-xs text-[#9CA3AF]">
                     <TrendingUp className="w-3 h-3 shrink-0 text-emerald-500" />
                     +&#8377;1,640 vs last week

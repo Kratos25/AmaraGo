@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Users, UserCheck, CalendarCheck, CalendarClock,
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
 import AdminLayout from './_components/AdminLayout';
+import { adminAPI, providersAPI, bookingsAPI, type DashboardStats, type ProviderProfile, type Booking } from '@/lib/api';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary   #C84B31   Hover #B04028
@@ -22,65 +23,7 @@ import AdminLayout from './_components/AdminLayout';
 // Text-1    #1A1A1A   Text-2 #6B7280   Text-3 #9CA3AF
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface PendingSP {
-  id: string;
-  name: string;
-  emoji: string;
-  experience: string;
-  location: string;
-  specialties: string[];
-  rating?: number;
-  appliedAt: string;
-}
-
-interface RecentBooking {
-  id: string;
-  client: string;
-  service: string;
-  provider: string;
-  amount: number;
-  status: 'completed' | 'in_progress' | 'searching' | 'confirmed';
-  time: string;
-  location: string;
-}
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const PENDING_SPS: PendingSP[] = [
-  {
-    id: 'sp1', name: 'Kavita Sharma', emoji: '👩‍🦱',
-    experience: '3 years', location: 'Bandra West, Mumbai',
-    specialties: ['Makeup', 'Hair'], appliedAt: '2 hours ago',
-  },
-  {
-    id: 'sp2', name: 'Deepika Rao', emoji: '👩',
-    experience: '2 years', location: 'Juhu, Mumbai',
-    specialties: ['Skin Care', 'Waxing'], appliedAt: '5 hours ago',
-  },
-  {
-    id: 'sp3', name: 'Sunita Verma', emoji: '🧖‍♀️',
-    experience: '5 years', location: 'Andheri West, Mumbai',
-    specialties: ['Bridal', 'Makeup', 'Nail Art'], appliedAt: '1 day ago',
-  },
-];
-
-const RECENT_BOOKINGS: RecentBooking[] = [
-  { id: 'b1', client: 'Ananya S.', service: 'Gold Facial',    provider: 'Meera P.',   amount: 1599, status: 'completed',   time: 'Today, 3:45 PM',      location: 'Bandra West' },
-  { id: 'b2', client: 'Priya M.', service: 'Party Makeup',   provider: 'Riya S.',    amount: 1999, status: 'in_progress', time: 'Today, 12:30 PM',     location: 'Juhu'        },
-  { id: 'b3', client: 'Sneha R.', service: 'Hair Spa',       provider: 'Pending',    amount: 999,  status: 'searching',   time: 'Today, 6:00 PM',      location: 'Worli'       },
-  { id: 'b4', client: 'Divya N.', service: 'Bridal Makeup',  provider: 'Kavita M.',  amount: 4999, status: 'confirmed',   time: 'Tomorrow, 10:00 AM',  location: 'Powai'       },
-  { id: 'b5', client: 'Meghna K.', service: 'Nail Art',      provider: 'Sunita V.',  amount: 699,  status: 'completed',   time: 'Yesterday, 4:00 PM',  location: 'Dadar'       },
-];
-
-const BOOKING_STATUS = {
-  completed:   { label: 'Completed',   bg: 'bg-green-50',  border: 'border-green-100', text: 'text-green-700',  dot: 'bg-green-500'  },
-  in_progress: { label: 'In Progress', bg: 'bg-blue-50',   border: 'border-blue-100',  text: 'text-blue-700',   dot: 'bg-blue-500'   },
-  searching:   { label: 'Searching',   bg: 'bg-amber-50',  border: 'border-amber-100', text: 'text-amber-700',  dot: 'bg-amber-500'  },
-  confirmed:   { label: 'Confirmed',   bg: 'bg-[#FFF0EC]', border: 'border-[#FDDDD5]', text: 'text-[#C84B31]',  dot: 'bg-[#C84B31]'  },
-};
-
-// Weekly sparkline data (Mon–Sun)
+// Weekly sparkline data (Mon–Sun) — decorative only
 const WEEKLY_REVENUE = [18400, 22100, 15800, 31200, 28900, 42000, 38500];
 const WEEKLY_BOOKINGS = [12, 18, 9, 24, 21, 31, 27];
 
@@ -156,16 +99,34 @@ function StatCard({ label, value, change, positive, Icon, iconColor, iconBg, ico
 export default function AdminDashboard() {
   const router = useRouter();
   const { toast } = useToast();
-  const [pendingSPs, setPendingSPs] = useState<PendingSP[]>(PENDING_SPS);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
+  const [pendingProviders, setPendingProviders] = useState<ProviderProfile[]>([]);
 
-  const handleApprove = (id: string, name: string) => {
-    setPendingSPs((p) => p.filter((sp) => sp.id !== id));
-    toast({ title: `${name} approved ✓`, description: 'Provider is now active and can receive bookings.' });
+  useEffect(() => {
+    adminAPI.getDashboard().then(({ data }) => setStats(data)).catch(() => {});
+    bookingsAPI.list({ status: undefined }).then(({ data }) => setRecentBookings(data.slice(0, 5))).catch(() => {});
+    providersAPI.list({ approved: false }).then(({ data }) => setPendingProviders(data)).catch(() => {});
+  }, []);
+
+  const handleApprove = async (uid: string, name: string) => {
+    try {
+      await providersAPI.setApproval(uid, true);
+      setPendingProviders((p) => p.filter((sp) => sp.uid !== uid));
+      toast({ title: `${name} approved ✓`, description: 'Provider is now active and can receive bookings.' });
+    } catch {
+      toast({ title: 'Failed to approve', variant: 'destructive' });
+    }
   };
 
-  const handleReject = (id: string, name: string) => {
-    setPendingSPs((p) => p.filter((sp) => sp.id !== id));
-    toast({ title: `${name} rejected`, description: 'Provider application has been declined.' });
+  const handleReject = async (uid: string, name: string) => {
+    try {
+      await providersAPI.setApproval(uid, false);
+      setPendingProviders((p) => p.filter((sp) => sp.uid !== uid));
+      toast({ title: `${name} rejected`, description: 'Provider application has been declined.' });
+    } catch {
+      toast({ title: 'Failed to reject', variant: 'destructive' });
+    }
   };
 
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -188,7 +149,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
         <StatCard
           label="Total Clients"
-          value="2,450"
+          value={stats ? stats.verified_clients.toLocaleString() : "2,450"}
           change="+12% MTD"
           positive
           Icon={Users}
@@ -201,7 +162,7 @@ export default function AdminDashboard() {
         />
         <StatCard
           label="Service Providers"
-          value="48"
+          value={stats ? stats.active_providers.toString() : "48"}
           change="+5% MTD"
           positive
           Icon={UserCheck}
@@ -214,7 +175,7 @@ export default function AdminDashboard() {
         />
         <StatCard
           label="Total Bookings"
-          value="1,284"
+          value={stats ? stats.total_bookings.toLocaleString() : "1,284"}
           change="+18% MTD"
           positive
           Icon={CalendarCheck}
@@ -253,14 +214,14 @@ export default function AdminDashboard() {
         />
         <StatCard
           label="Pending Approvals"
-          value={String(pendingSPs.length)}
+          value={String(pendingProviders.length)}
           change="Needs action"
           positive={false}
           Icon={AlertCircle}
           iconColor="text-rose-500"
           iconBg="bg-rose-50"
           iconBorder="border-rose-100"
-          sparkData={[8, 6, 9, 5, 7, 4, pendingSPs.length]}
+          sparkData={[8, 6, 9, 5, 7, 4, pendingProviders.length]}
           sparkColor="#F43F5E"
         />
       </div>
@@ -295,45 +256,50 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-1.5">
-                {RECENT_BOOKINGS.map((b) => {
-                  const s = BOOKING_STATUS[b.status];
+                {recentBookings.map((b) => {
+                  const apiStatus = b.status;
+                  const statusKey =
+                    apiStatus === 'completed' ? 'completed' :
+                    apiStatus === 'active'    ? 'in_progress' :
+                    apiStatus === 'confirmed' ? 'confirmed' : 'searching';
+                  const statusCfg = {
+                    completed:   { label: 'Completed',   bg: 'bg-green-50',  border: 'border-green-100', text: 'text-green-700',  dot: 'bg-green-500'  },
+                    in_progress: { label: 'In Progress', bg: 'bg-blue-50',   border: 'border-blue-100',  text: 'text-blue-700',   dot: 'bg-blue-500'   },
+                    searching:   { label: 'Searching',   bg: 'bg-amber-50',  border: 'border-amber-100', text: 'text-amber-700',  dot: 'bg-amber-500'  },
+                    confirmed:   { label: 'Confirmed',   bg: 'bg-[#FFF0EC]', border: 'border-[#FDDDD5]', text: 'text-[#C84B31]',  dot: 'bg-[#C84B31]'  },
+                  } as const;
+                  const s = statusCfg[statusKey as keyof typeof statusCfg];
                   return (
                     <div
                       key={b.id}
                       className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_80px_100px] gap-1 sm:gap-3 px-3 py-3 bg-[#F5F4F2] rounded-xl border border-transparent hover:border-[#EBEBEB] transition-colors cursor-pointer"
                       onClick={() => router.push(`/admin/bookings/${b.id}`)}
                     >
-                      {/* Mobile: stacked layout */}
                       <div className="flex items-center justify-between sm:block">
                         <div>
-                          <p className="text-[13px] font-semibold text-[#1A1A1A]">{b.client}</p>
+                          <p className="text-[13px] font-semibold text-[#1A1A1A]">{b.client_name ?? 'Client'}</p>
                           <div className="flex items-center gap-1 mt-0.5">
                             <MapPin className="w-2.5 h-2.5 text-[#9CA3AF]" />
-                            <span className="text-[10px] text-[#9CA3AF]">{b.location}</span>
+                            <span className="text-[10px] text-[#9CA3AF]">{b.address}</span>
                           </div>
                         </div>
-                        {/* Mobile: show amount + status on right */}
                         <div className="flex items-center gap-2 sm:hidden">
-                          <span className="text-[13px] font-bold text-[#1A1A1A]">₹{b.amount.toLocaleString()}</span>
+                          <span className="text-[13px] font-bold text-[#1A1A1A]">₹{b.total_price.toLocaleString()}</span>
                           <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', s.bg, s.border, s.text)}>
                             {s.label}
                           </span>
                         </div>
                       </div>
-
                       <div className="hidden sm:block">
-                        <p className="text-[12px] font-medium text-[#1A1A1A]">{b.service}</p>
+                        <p className="text-[12px] font-medium text-[#1A1A1A]">{b.service_name ?? 'Service'}</p>
                         <p className="text-[10px] text-[#9CA3AF] mt-0.5">{b.time}</p>
                       </div>
-
                       <div className="hidden sm:block">
-                        <p className="text-[12px] font-medium text-[#6B7280]">{b.provider}</p>
+                        <p className="text-[12px] font-medium text-[#6B7280]">{b.provider_name ?? 'Pending'}</p>
                       </div>
-
                       <div className="hidden sm:block">
-                        <p className="text-[13px] font-bold text-[#1A1A1A]">₹{b.amount.toLocaleString()}</p>
+                        <p className="text-[13px] font-bold text-[#1A1A1A]">₹{b.total_price.toLocaleString()}</p>
                       </div>
-
                       <div className="hidden sm:flex items-center">
                         <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border', s.bg, s.border, s.text)}>
                           <span className={cn('w-1.5 h-1.5 rounded-full', s.dot)} />
@@ -343,6 +309,9 @@ export default function AdminDashboard() {
                     </div>
                   );
                 })}
+                {recentBookings.length === 0 && (
+                  <p className="text-center text-[12px] text-[#9CA3AF] py-8">No bookings yet</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -414,7 +383,6 @@ export default function AdminDashboard() {
         {/* ══ RIGHT ═════════════════════════════════════════════════════════ */}
         <div className="space-y-5">
 
-          {/* Pending SP Approvals */}
           <Card className="border border-[#EBEBEB] shadow-none bg-white">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-4">
@@ -422,14 +390,14 @@ export default function AdminDashboard() {
                   <p className="font-bold text-[15px] text-[#1A1A1A]">Pending SP Approvals</p>
                   <p className="text-[11px] text-[#9CA3AF] mt-0.5">Providers awaiting verification</p>
                 </div>
-                {pendingSPs.length > 0 && (
+                {pendingProviders.length > 0 && (
                   <span className="text-[11px] font-bold text-[#C84B31] bg-[#FFF0EC] border border-[#FDDDD5] px-2.5 py-1 rounded-full">
-                    {pendingSPs.length} pending
+                    {pendingProviders.length} pending
                   </span>
                 )}
               </div>
 
-              {pendingSPs.length === 0 ? (
+              {pendingProviders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center">
                   <div className="w-12 h-12 rounded-full bg-green-50 border border-green-100 flex items-center justify-center mb-3">
                     <Check className="w-6 h-6 text-green-500" />
@@ -439,12 +407,11 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {pendingSPs.map((sp) => (
-                    <div key={sp.id} className="bg-[#F5F4F2] rounded-xl border border-[#EBEBEB] p-4">
-                      {/* SP header */}
+                  {pendingProviders.map((sp) => (
+                    <div key={sp.uid} className="bg-[#F5F4F2] rounded-xl border border-[#EBEBEB] p-4">
                       <div className="flex items-start gap-3 mb-3">
                         <div className="w-10 h-10 rounded-full bg-[#FFF0EC] border border-[#FDDDD5] flex items-center justify-center text-lg shrink-0">
-                          {sp.emoji}
+                          ✨
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
@@ -454,35 +421,37 @@ export default function AdminDashboard() {
                             </span>
                           </div>
                           <div className="flex items-center gap-3 mt-0.5">
-                            <span className="text-[11px] text-[#9CA3AF]">{sp.experience} exp.</span>
+                            <span className="text-[11px] text-[#9CA3AF]">{sp.experience_years}yr exp.</span>
                             <span className="text-[#EBEBEB]">·</span>
                             <span className="text-[11px] text-[#9CA3AF] truncate">{sp.location}</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Specialties */}
                       <div className="flex flex-wrap gap-1.5 mb-3">
-                        {sp.specialties.map((s) => (
+                        {sp.services_offered.slice(0, 3).map((s) => (
                           <span key={s} className="text-[10px] font-semibold text-[#6B7280] bg-white border border-[#EBEBEB] px-2 py-0.5 rounded-full">
                             {s}
                           </span>
                         ))}
-                        <span className="text-[10px] text-[#9CA3AF] self-center ml-1">· {sp.appliedAt}</span>
+                        {sp.created_at && (
+                          <span className="text-[10px] text-[#9CA3AF] self-center ml-1">
+                            · {new Date(sp.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          </span>
+                        )}
                       </div>
 
-                      {/* Action buttons */}
                       <div className="grid grid-cols-2 gap-2">
                         <Button
                           className="h-9 bg-[#C84B31] hover:bg-[#B04028] text-white font-semibold text-[12px] rounded-xl shadow-none border-0"
-                          onClick={() => handleApprove(sp.id, sp.name)}
+                          onClick={() => handleApprove(sp.uid, sp.name)}
                         >
                           <Check className="w-3.5 h-3.5 mr-1.5" /> Approve
                         </Button>
                         <Button
                           variant="outline"
                           className="h-9 border-[#EBEBEB] text-[#6B7280] hover:bg-red-50 hover:border-red-200 hover:text-red-500 font-semibold text-[12px] rounded-xl shadow-none"
-                          onClick={() => handleReject(sp.id, sp.name)}
+                          onClick={() => handleReject(sp.uid, sp.name)}
                         >
                           <X className="w-3.5 h-3.5 mr-1.5" /> Reject
                         </Button>
@@ -492,7 +461,7 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {pendingSPs.length > 0 && (
+              {pendingProviders.length > 0 && (
                 <button
                   onClick={() => router.push('/admin/providers?tab=pending')}
                   className="w-full flex items-center justify-center gap-1.5 mt-3 py-2.5 text-[12px] font-semibold text-[#C84B31] hover:opacity-80 transition-opacity"

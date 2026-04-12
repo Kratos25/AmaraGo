@@ -1,15 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit3, Trash2, Check, X, Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
-import { Package, SEED_PACKAGES, InlineInput, Toggle } from './shared';
+import { packagesAPI, type Package } from '@/lib/api';
+import { InlineInput, Toggle } from './shared';
 
 export default function PackagesTab() {
   const { toast } = useToast();
-  const [packages, setPackages] = useState<Package[]>(SEED_PACKAGES);
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [loading, setLoading]   = useState(true);
   const [adding, setAdding]     = useState(false);
   const [editId, setEditId]     = useState<string | null>(null);
   const [draft, setDraft] = useState({
@@ -17,38 +19,75 @@ export default function PackagesTab() {
     originalPrice: '', price: '', badge: '', servicesRaw: '',
   });
 
+  useEffect(() => {
+    packagesAPI.list()
+      .then(({ data }) => setPackages(data))
+      .catch(() => toast({ title: 'Failed to load packages', variant: 'destructive' }))
+      .finally(() => setLoading(false));
+  }, []);
+
   const resetDraft = () => setDraft({ name: '', tagline: '', duration: '', originalPrice: '', price: '', badge: '', servicesRaw: '' });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!draft.name.trim()) return;
-    const orig  = parseInt(draft.originalPrice) || 0;
-    const price = parseInt(draft.price) || 0;
-    const svcs  = draft.servicesRaw.split(',').map((s) => s.trim()).filter(Boolean);
-    if (editId) {
-      setPackages((p) => p.map((x) => x.id === editId
-        ? { ...x, name: draft.name, tagline: draft.tagline, duration: draft.duration, originalPrice: orig, price, savings: orig - price, services: svcs, badge: draft.badge || undefined }
-        : x,
-      ));
-      toast({ title: 'Package updated' });
-      setEditId(null);
-    } else {
-      setPackages((p) => [...p, {
-        id: `pkg${Date.now()}`, name: draft.name, tagline: draft.tagline,
-        services: svcs, duration: draft.duration, originalPrice: orig,
-        price, savings: orig - price, rating: 0, bookings: 0,
-        active: true, badge: draft.badge || undefined,
-      }]);
-      toast({ title: 'Package added ✓' });
-      setAdding(false);
+    const original_price = parseInt(draft.originalPrice) || 0;
+    const price          = parseInt(draft.price) || 0;
+    const services       = draft.servicesRaw.split(',').map((s) => s.trim()).filter(Boolean);
+    try {
+      if (editId) {
+        const { data } = await packagesAPI.update(editId, {
+          name: draft.name, tagline: draft.tagline, duration: draft.duration,
+          original_price, price, services, badge: draft.badge || undefined,
+        });
+        setPackages((p) => p.map((x) => x.id === editId ? data : x));
+        toast({ title: 'Package updated' });
+        setEditId(null);
+      } else {
+        const { data } = await packagesAPI.create({
+          name: draft.name, tagline: draft.tagline, duration: draft.duration,
+          original_price, price, services, badge: draft.badge || undefined, active: true,
+        } as any);
+        setPackages((p) => [...p, data]);
+        toast({ title: 'Package added ✓' });
+        setAdding(false);
+      }
+    } catch {
+      toast({ title: 'Failed to save package', variant: 'destructive' });
     }
     resetDraft();
   };
 
   const startEdit = (pkg: Package) => {
-    setDraft({ name: pkg.name, tagline: pkg.tagline, duration: pkg.duration, originalPrice: String(pkg.originalPrice), price: String(pkg.price), badge: pkg.badge ?? '', servicesRaw: pkg.services.join(', ') });
+    setDraft({
+      name: pkg.name, tagline: pkg.tagline, duration: pkg.duration,
+      originalPrice: String(pkg.original_price), price: String(pkg.price),
+      badge: pkg.badge ?? '',
+      servicesRaw: pkg.services.join(', '),
+    });
     setEditId(pkg.id);
     setAdding(false);
   };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await packagesAPI.delete(id);
+      setPackages((p) => p.filter((x) => x.id !== id));
+      toast({ title: 'Package removed' });
+    } catch {
+      toast({ title: 'Failed to delete', variant: 'destructive' });
+    }
+  };
+
+  const handleToggleActive = async (pkg: Package, value: boolean) => {
+    try {
+      const { data } = await packagesAPI.update(pkg.id, { active: value });
+      setPackages((p) => p.map((x) => x.id === pkg.id ? data : x));
+    } catch {
+      toast({ title: 'Failed to update package', variant: 'destructive' });
+    }
+  };
+
+  if (loading) return <p className="text-[13px] text-[#9CA3AF] py-8 text-center">Loading packages…</p>;
 
   return (
     <div className="space-y-4">
@@ -104,7 +143,7 @@ export default function PackagesTab() {
                   <h3 className="font-bold text-[15px] text-[#1A1A1A] leading-tight">{pkg.name}</h3>
                   <p className="text-[11px] text-[#9CA3AF] mt-0.5 leading-snug">{pkg.tagline}</p>
                 </div>
-                <Toggle checked={pkg.active} onChange={(v) => setPackages((p) => p.map((x) => x.id === pkg.id ? { ...x, active: v } : x))} />
+                <Toggle checked={pkg.active} onChange={(v) => handleToggleActive(pkg, v)} />
               </div>
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {pkg.services.map((s) => (
@@ -114,10 +153,10 @@ export default function PackagesTab() {
               <div className="flex items-end justify-between mb-4">
                 <div>
                   <p className="text-[22px] font-bold text-[#C84B31] leading-none">₹{pkg.price.toLocaleString()}</p>
-                  <p className="text-[11px] text-[#9CA3AF] line-through mt-0.5">₹{pkg.originalPrice.toLocaleString()}</p>
+                  <p className="text-[11px] text-[#9CA3AF] line-through mt-0.5">₹{pkg.original_price.toLocaleString()}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[11px] font-bold text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">
+                    <span className="text-[11px] font-bold text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">
                     Save ₹{pkg.savings.toLocaleString()}
                   </span>
                   <p className="text-[10px] text-[#9CA3AF] mt-1">{pkg.duration}</p>
@@ -128,13 +167,13 @@ export default function PackagesTab() {
                   <span className="flex items-center gap-1">
                     <Star className="w-3 h-3 text-amber-400 fill-amber-400" />{pkg.rating || '—'}
                   </span>
-                  <span>{pkg.bookings} bookings</span>
+                  <span>{pkg.total_bookings} bookings</span>
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => startEdit(pkg)} className="w-7 h-7 rounded-lg bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-[#FFF0EC] hover:text-[#C84B31] transition-colors">
                     <Edit3 className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => { setPackages((p) => p.filter((x) => x.id !== pkg.id)); toast({ title: 'Package removed' }); }} className="w-7 h-7 rounded-lg bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-red-50 hover:text-red-500 transition-colors">
+                  <button onClick={() => handleDelete(pkg.id)} className="w-7 h-7 rounded-lg bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-red-50 hover:text-red-500 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>

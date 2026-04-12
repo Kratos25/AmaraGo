@@ -5,9 +5,9 @@ import { Plus, Trash2, Check, X, Copy, AlertCircle, Percent, IndianRupee } from 
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
-import api from '@/lib/axios';
+import { couponsAPI, Coupon } from '@/lib/api';
 import {
-  Coupon, InlineInput, InlineSelect, InlineDateInput, Toggle, formatDate,
+  InlineInput, InlineSelect, InlineDateInput, Toggle,
 } from './shared';
 
 const APPLICABLE_OPTIONS = [
@@ -41,8 +41,8 @@ export default function OffersTab() {
   const fetchCoupons = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get<Coupon[]>('/api/v1/coupons/admin');
-      setCoupons(data.map((c) => ({ ...c, id: c.code })));
+      const { data } = await couponsAPI.list();
+      setCoupons(data);
     } catch {
       toast({ title: 'Failed to load coupons', variant: 'destructive' });
     } finally {
@@ -60,18 +60,20 @@ export default function OffersTab() {
     }
     setSaving(true);
     try {
-      await api.post('/api/v1/coupons', {
-        code:          draft.code.toUpperCase(),
-        description:   draft.description,
-        type:          draft.type,
-        value:         parseFloat(draft.value),
-        minOrder:      parseFloat(draft.minOrder) || 0,
-        maxDiscount:   draft.maxDiscount ? parseFloat(draft.maxDiscount) : null,
-        usageLimit:    parseInt(draft.usageLimit),
-        validFrom:     formatDate(draft.validFrom),
-        validTo:       formatDate(draft.validTo),
-        applicableFor: draft.applicableFor,
-        autoApply:     draft.autoApply,
+      await couponsAPI.create({
+        code:            draft.code.toUpperCase(),
+        description:     draft.description,
+        type:            draft.type,
+        value:           parseFloat(draft.value),
+        min_order:       parseFloat(draft.minOrder) || 0,
+        max_discount:    draft.maxDiscount ? parseFloat(draft.maxDiscount) : undefined,
+        usage_limit:     parseInt(draft.usageLimit),
+        used_count:      0,
+        valid_from:      draft.validFrom,
+        valid_to:        draft.validTo,
+        applicable_for:  draft.applicableFor,
+        auto_apply:      draft.autoApply,
+        active:          true,
       });
       toast({ title: `Coupon ${draft.code.toUpperCase()} created ✓` });
       setDraft(EMPTY_DRAFT);
@@ -85,21 +87,21 @@ export default function OffersTab() {
   };
 
   // ── Toggle ────────────────────────────────────────────────────────────────
-  const handleToggle = async (code: string, current: boolean) => {
-    setCoupons((p) => p.map((c) => c.code === code ? { ...c, active: !current } : c));
+  const handleToggle = async (id: string, current: boolean) => {
+    setCoupons((p) => p.map((c) => c.id === id ? { ...c, active: !current } : c));
     try {
-      await api.patch(`/api/v1/coupons/${code}/toggle`);
+      await couponsAPI.update(id, { active: !current });
     } catch {
-      setCoupons((p) => p.map((c) => c.code === code ? { ...c, active: current } : c));
+      setCoupons((p) => p.map((c) => c.id === id ? { ...c, active: current } : c));
       toast({ title: 'Failed to update coupon', variant: 'destructive' });
     }
   };
 
   // ── Delete ────────────────────────────────────────────────────────────────
-  const handleDelete = async (code: string) => {
-    setCoupons((p) => p.filter((c) => c.code !== code));
+  const handleDelete = async (id: string) => {
+    setCoupons((p) => p.filter((c) => c.id !== id));
     try {
-      await api.delete(`/api/v1/coupons/${code}`);
+      await couponsAPI.delete(id);
       toast({ title: 'Coupon deleted' });
     } catch {
       toast({ title: 'Failed to delete', variant: 'destructive' });
@@ -127,8 +129,8 @@ export default function OffersTab() {
         {[
           { label: 'Total Coupons',  value: coupons.length,                                                color: 'text-[#C84B31]'  },
           { label: 'Active',         value: coupons.filter((c) => c.active).length,                        color: 'text-green-600'  },
-          { label: 'Total Redeemed', value: coupons.reduce((s, c) => s + c.usedCount, 0).toLocaleString(), color: 'text-blue-500'   },
-          { label: 'Auto-Apply',     value: coupons.filter((c) => c.autoApply && c.active).length,         color: 'text-purple-600' },
+          { label: 'Total Redeemed', value: coupons.reduce((s, c) => s + c.used_count, 0).toLocaleString(), color: 'text-blue-500'   },
+          { label: 'Auto-Apply',     value: coupons.filter((c) => c.auto_apply && c.active).length,         color: 'text-purple-600' },
         ].map(({ label, value, color }) => (
           <Card key={label} className="border border-[#EBEBEB] shadow-none bg-white">
             <CardContent className="p-4">
@@ -227,10 +229,10 @@ export default function OffersTab() {
       {/* Coupon cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {coupons.map((coupon) => {
-          const usagePct = coupon.usageLimit > 0
-            ? Math.round((coupon.usedCount / coupon.usageLimit) * 100)
+          const usagePct = coupon.usage_limit > 0
+            ? Math.round((coupon.used_count / coupon.usage_limit) * 100)
             : 0;
-          const applicableLabel = APPLICABLE_OPTIONS.find((o) => o.value === coupon.applicableFor)?.label ?? '';
+          const applicableLabel = APPLICABLE_OPTIONS.find((o) => o.value === coupon.applicable_for)?.label ?? '';
 
           return (
             <Card
@@ -250,13 +252,13 @@ export default function OffersTab() {
                       <button onClick={() => copyCode(coupon.code)} className="w-6 h-6 rounded-md bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#9CA3AF] hover:text-[#C84B31] transition-colors">
                         <Copy className="w-3 h-3" />
                       </button>
-                      {coupon.autoApply && (
+                      {coupon.auto_apply && (
                         <span className="text-[9px] font-bold text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded-full">AUTO</span>
                       )}
                     </div>
                     <p className="text-[11px] text-[#9CA3AF]">{coupon.description}</p>
                   </div>
-                  <Toggle checked={coupon.active} onChange={() => handleToggle(coupon.code, coupon.active)} />
+                  <Toggle checked={coupon.active} onChange={() => handleToggle(coupon.id, coupon.active)} />
                 </div>
 
                 {/* Discount highlight */}
@@ -270,18 +272,18 @@ export default function OffersTab() {
                       {coupon.type === 'percentage' ? `${coupon.value}% OFF` : `₹${coupon.value} OFF`}
                     </span>
                   </div>
-                  {coupon.maxDiscount && (
-                    <span className="text-[10px] text-[#9CA3AF]">up to ₹{coupon.maxDiscount}</span>
+                  {coupon.max_discount && (
+                    <span className="text-[10px] text-[#9CA3AF]">up to ₹{coupon.max_discount}</span>
                   )}
                 </div>
 
                 {/* Details grid */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   {[
-                    { label: 'Min Order',  value: `₹${coupon.minOrder.toLocaleString()}` },
-                    { label: 'Valid Till', value: coupon.validTo },
+                    { label: 'Min Order',  value: `₹${coupon.min_order.toLocaleString()}` },
+                    { label: 'Valid Till', value: coupon.valid_to },
                     { label: 'For',        value: applicableLabel },
-                    { label: 'Redeemed',   value: `${coupon.usedCount} / ${coupon.usageLimit.toLocaleString()}` },
+                    { label: 'Redeemed',   value: `${coupon.used_count} / ${coupon.usage_limit.toLocaleString()}` },
                   ].map(({ label, value }) => (
                     <div key={label} className="bg-[#F5F4F2] rounded-lg px-2.5 py-2 border border-[#EBEBEB]">
                       <p className="text-[9px] text-[#9CA3AF] font-medium">{label}</p>
@@ -311,9 +313,9 @@ export default function OffersTab() {
 
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-3 border-t border-[#EBEBEB]">
-                  <span className="text-[10px] text-[#9CA3AF]">{coupon.validFrom} → {coupon.validTo}</span>
+                  <span className="text-[10px] text-[#9CA3AF]">{coupon.valid_from} → {coupon.valid_to}</span>
                   <button
-                    onClick={() => handleDelete(coupon.code)}
+                    onClick={() => handleDelete(coupon.id)}
                     className="w-7 h-7 rounded-lg bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-red-50 hover:text-red-500 transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

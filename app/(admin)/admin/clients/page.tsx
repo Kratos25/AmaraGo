@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search, Star, MapPin, Phone, Mail,
@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
 import AdminLayout from '../_components/AdminLayout';
 import { Button } from '@/components/ui/button';
+import { adminAPI, type UserProfile } from '@/lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,82 +43,30 @@ interface Client {
   isVip: boolean;
 }
 
-// ─── Mock data ───────────────────────────────────────────────────────────────
+// ─── API → local shape mapper ─────────────────────────────────────────────────
 
-const ALL_CLIENTS: Client[] = [
-  {
-    id: 'c1', name: 'Ananya Singh',   emoji: '👩',   phone: '+91 98765 10001', email: 'ananya@gmail.com',
-    location: 'Bandra West, Mumbai',  status: 'active',
-    totalBookings: 24, completedBookings: 22, cancelledBookings: 2,
-    totalSpend: 38400,  spendThisMonth: 5200,  avgBookingValue: 1600,
-    favoriteService: 'Gold Facial',   lastBooking: 'Today, 3:45 PM',    joinedAt: 'Jan 2023',
-    rating: 5.0, isVip: true,
-  },
-  {
-    id: 'c2', name: 'Priya Mehta',    emoji: '👩‍🦱', phone: '+91 98765 10002', email: 'priya@gmail.com',
-    location: 'Juhu, Mumbai',         status: 'active',
-    totalBookings: 18, completedBookings: 17, cancelledBookings: 1,
-    totalSpend: 29700,  spendThisMonth: 3999,  avgBookingValue: 1650,
-    favoriteService: 'Party Makeup',  lastBooking: 'Today, 12:30 PM',   joinedAt: 'Mar 2023',
-    rating: 4.8, isVip: true,
-  },
-  {
-    id: 'c3', name: 'Sneha Reddy',    emoji: '👰',   phone: '+91 98765 10003', email: 'sneha@gmail.com',
-    location: 'Powai, Mumbai',        status: 'active',
-    totalBookings: 31, completedBookings: 29, cancelledBookings: 2,
-    totalSpend: 82000,  spendThisMonth: 12000, avgBookingValue: 2645,
-    favoriteService: 'Bridal Makeup', lastBooking: 'Yesterday',          joinedAt: 'Nov 2022',
-    rating: 4.9, isVip: true,
-  },
-  {
-    id: 'c4', name: 'Divya Nair',     emoji: '🧖‍♀️', phone: '+91 98765 10004', email: 'divya@gmail.com',
-    location: 'Dadar, Mumbai',        status: 'active',
-    totalBookings: 12, completedBookings: 11, cancelledBookings: 1,
-    totalSpend: 14800,  spendThisMonth: 1599,  avgBookingValue: 1233,
-    favoriteService: 'Hair Spa',      lastBooking: 'Dec 28',             joinedAt: 'Jun 2023',
-    rating: 4.6, isVip: false,
-  },
-  {
-    id: 'c5', name: 'Meghna Kulkarni', emoji: '💅',  phone: '+91 98765 10005', email: 'meghna@gmail.com',
-    location: 'Worli, Mumbai',        status: 'active',
-    totalBookings: 9, completedBookings: 8, cancelledBookings: 1,
-    totalSpend: 8100,   spendThisMonth: 699,   avgBookingValue: 900,
-    favoriteService: 'Nail Art',      lastBooking: 'Dec 27',             joinedAt: 'Sep 2023',
-    rating: 4.7, isVip: false,
-  },
-  {
-    id: 'c6', name: 'Kavita Shah',    emoji: '👩‍🦳', phone: '+91 98765 10006', email: 'kavita@gmail.com',
-    location: 'Malad West, Mumbai',   status: 'active',
-    totalBookings: 6, completedBookings: 6, cancelledBookings: 0,
-    totalSpend: 5400,   spendThisMonth: 2200,  avgBookingValue: 900,
-    favoriteService: 'Skin Care',     lastBooking: 'Dec 26',             joinedAt: 'Oct 2023',
-    rating: 4.5, isVip: false,
-  },
-  {
-    id: 'c7', name: 'Ritu Sharma',    emoji: '👩‍🦰', phone: '+91 98765 10007', email: 'ritu@gmail.com',
-    location: 'Andheri East, Mumbai', status: 'inactive',
-    totalBookings: 4,  completedBookings: 3, cancelledBookings: 1,
-    totalSpend: 3800,   spendThisMonth: 0,     avgBookingValue: 950,
-    favoriteService: 'Hair Styling',  lastBooking: '2 months ago',       joinedAt: 'Aug 2023',
-    rating: 4.3, isVip: false,
-  },
-  {
-    id: 'c8', name: 'Pooja Verma',    emoji: '🧑‍🦱', phone: '+91 98765 10008', email: 'pooja@gmail.com',
-    location: 'Borivali, Mumbai',     status: 'inactive',
-    totalBookings: 2, completedBookings: 1, cancelledBookings: 1,
-    totalSpend: 1599,   spendThisMonth: 0,     avgBookingValue: 799,
-    favoriteService: 'Waxing',        lastBooking: '3 months ago',       joinedAt: 'Nov 2023',
-    rating: 3.5, isVip: false,
-  },
-  {
-    id: 'c9', name: 'Sonia Kapoor',   emoji: '😤',   phone: '+91 98765 10009', email: 'sonia@gmail.com',
-    location: 'Santacruz, Mumbai',    status: 'blocked',
-    totalBookings: 7, completedBookings: 3, cancelledBookings: 4,
-    totalSpend: 4200,   spendThisMonth: 0,     avgBookingValue: 600,
-    favoriteService: 'Facial',        lastBooking: '1 month ago',        joinedAt: 'Jul 2023',
-    rating: 2.1, isVip: false,
-  },
-];
+function mapClient(u: UserProfile): Client {
+  return {
+    id:                u.uid,
+    name:              u.name,
+    emoji:             '👤',
+    phone:             u.phone ?? '',
+    email:             u.email ?? '',
+    location:          '',
+    status:            'active',
+    totalBookings:     0,
+    completedBookings: 0,
+    cancelledBookings: 0,
+    totalSpend:        0,
+    spendThisMonth:    0,
+    avgBookingValue:   0,
+    favoriteService:   '—',
+    lastBooking:       u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '—',
+    joinedAt:          u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—',
+    rating:            0,
+    isVip:             false,
+  };
+}
 
 // ─── Configs ─────────────────────────────────────────────────────────────────
 
@@ -294,12 +243,16 @@ export default function AdminClients() {
   const router    = useRouter();
   const { toast } = useToast();
 
-  const [clients, setClients]         = useState<Client[]>(ALL_CLIENTS);
+  const [clients, setClients]         = useState<Client[]>([]);
   const [activeTab, setActiveTab]     = useState<TabKey>('all');
   const [search, setSearch]           = useState('');
   const [sortBy, setSortBy]           = useState<'recent' | 'spend' | 'bookings' | 'rating'>('recent');
   const [showFilters, setShowFilters] = useState(false);
   const [locationFilter, setLocationFilter] = useState('All');
+
+  useEffect(() => {
+    adminAPI.listClients().then(({ data }) => setClients(data.map(mapClient))).catch(() => {});
+  }, []);
 
   // Counts
   const counts: Record<TabKey, number> = useMemo(() => ({

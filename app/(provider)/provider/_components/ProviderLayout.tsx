@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Home, ClipboardList, Wallet, User, BookOpen,
@@ -10,8 +10,9 @@ import {
 import { cn } from '@/app/lib/utils';
 import Image from 'next/image';
 import Logo from '@/public/Amara_Logo.png';
-import { signOut, onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { providersAPI } from '@/lib/api';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary   #C84B31   Hover #B04028
@@ -82,8 +83,24 @@ export default function ProviderLayout({
 }: ProviderLayoutProps) {
   const router   = useRouter();
   const pathname = usePathname();
-  const [isOnline, setIsOnline]           = useState(true);
+  const [isOnline, setIsOnline]           = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Load initial online status from backend
+  useEffect(() => {
+    providersAPI.getMyProfile()
+      .then(({ data }) => setIsOnline(data.is_online))
+      .catch(() => {});
+  }, []);
+
+  const handleOnlineToggle = async (value: boolean) => {
+    setIsOnline(value); // optimistic
+    try {
+      await providersAPI.toggleOnline(value);
+    } catch {
+      setIsOnline(!value); // revert on error
+    }
+  };
 
   const isActive = (href: string) =>
     href === '/provider' ? pathname === '/provider' : pathname.startsWith(href);
@@ -202,7 +219,7 @@ export default function ProviderLayout({
               </span>
               <p className="text-[12px] font-semibold text-white">{isOnline ? 'Online' : 'Offline'}</p>
             </div>
-            <OnlineSwitch checked={isOnline} onCheckedChange={setIsOnline} />
+            <OnlineSwitch checked={isOnline} onCheckedChange={handleOnlineToggle} />
           </div>
         </div>
 
@@ -376,7 +393,7 @@ export default function ProviderLayout({
                   </span>
                   <p className="text-[12px] font-semibold text-white">{isOnline ? 'Online' : 'Offline'}</p>
                 </div>
-                <OnlineSwitch checked={isOnline} onCheckedChange={setIsOnline} />
+                <OnlineSwitch checked={isOnline} onCheckedChange={handleOnlineToggle} />
               </div>
             </div>
 

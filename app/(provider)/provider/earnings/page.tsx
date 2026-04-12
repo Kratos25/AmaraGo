@@ -1,12 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { TrendingUp, ArrowDownToLine, Filter, Briefcase, Percent, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import ProviderLayout from '@/app/(provider)/provider/_components/ProviderLayout';
+import { providersAPI, type EarningsSummary } from '@/lib/api';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary   #C84B31   Hover #B04028   Active #9A3522
@@ -15,23 +16,18 @@ import ProviderLayout from '@/app/(provider)/provider/_components/ProviderLayout
 // Border    #EBEBEB
 // Text-1    #1A1A1A   Text-2 #6B7280   Text-3 #9CA3AF
 
-interface Transaction {
-  id: string;
-  service: string;
-  client: string;
-  amount: number;
-  date: string;
-}
-
-const transactions: Transaction[] = [
-  { id: '1', service: 'Gold Facial',     client: 'Ananya S.',  amount: 1599,  date: 'Today, 3:45 PM'  },
-  { id: '2', service: 'Party Makeup',    client: 'Priya M.',   amount: 1999,  date: 'Today, 12:30 PM' },
-  { id: '3', service: 'Hair Spa',        client: 'Meghna K.',  amount: 999,   date: 'Yesterday'       },
-  { id: '4', service: 'Bridal Package',  client: 'Sneha R.',   amount: 12000, date: 'Dec 25'          },
-];
-
 export default function SPEarnings() {
   const router = useRouter();
+  const [earningsData, setEarningsData] = useState<EarningsSummary | null>(null);
+
+  useEffect(() => {
+    providersAPI.getMyEarnings().then(({ data }) => setEarningsData(data)).catch(() => {});
+  }, []);
+
+  const transactions = earningsData?.transactions ?? [];
+  const totalJobs = earningsData?.total_jobs ?? 0;
+  const commissionRate = earningsData?.commission_rate ?? 15;
+  const pendingPayout = earningsData?.pending_payout ?? 0;
 
   return (
     <ProviderLayout title="Earnings" subtitle="Wednesday, 14 March 2025">
@@ -45,9 +41,9 @@ export default function SPEarnings() {
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { Icon: Briefcase, label: 'Total Jobs',  value: '156'   },
-              { Icon: Percent,   label: 'Commission',  value: '15%'   },
-              { Icon: Clock,     label: 'Pending',     value: '₹4.2K' },
+              { Icon: Briefcase, label: 'Total Jobs',  value: String(totalJobs) },
+              { Icon: Percent,   label: 'Commission',  value: `${commissionRate}%` },
+              { Icon: Clock,     label: 'Pending',     value: `₹${pendingPayout.toLocaleString('en-IN')}` },
             ].map(({ Icon, label, value }) => (
               <Card key={label} className="border border-[#EBEBEB] shadow-none bg-white">
                 <CardContent className="p-4 flex flex-col items-center text-center gap-2">
@@ -85,11 +81,11 @@ export default function SPEarnings() {
                       ✨
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-[#1A1A1A] truncate">{tx.service}</p>
-                      <p className="text-[11px] text-[#9CA3AF] mt-0.5">{tx.client} · {tx.date}</p>
+                      <p className="text-[13px] font-semibold text-[#1A1A1A] truncate">{tx.service_name}</p>
+                      <p className="text-[11px] text-[#9CA3AF] mt-0.5">{tx.client_name} · {new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                     </div>
                     <span className="text-[14px] font-bold text-green-600 shrink-0">
-                      +₹{tx.amount.toLocaleString()}
+                      +₹{tx.net_amount.toLocaleString('en-IN')}
                     </span>
                   </div>
                 ))}

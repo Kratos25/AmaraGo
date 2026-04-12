@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, Clock, MapPin, ChevronRight, Search, Star, CheckCircle, XCircle, Loader } from 'lucide-react';
+import { bookingsAPI, type Booking as APIBooking } from '@/lib/api';
 
 type BookingStatus = 'upcoming' | 'completed' | 'cancelled';
 
@@ -22,69 +23,6 @@ interface Booking {
   image: string;
 }
 
-const mockBookings: Booking[] = [
-  {
-    id: 'AMARA-001',
-    service: 'HydraFacial Signature',
-    category: 'Skin Care',
-    expert: 'Priya Sharma',
-    expertImage: 'https://randomuser.me/api/portraits/women/44.jpg',
-    expertRating: 4.9,
-    date: 'Sat, 1 Mar 2026',
-    time: '11:00 AM',
-    duration: '75 min',
-    address: 'Bandra West, Mumbai',
-    price: 3299,
-    status: 'upcoming',
-    image: 'https://picsum.photos/id/201/400/300',
-  },
-  {
-    id: 'AMARA-002',
-    service: 'Classic Haircut + Blow Dry',
-    category: 'Hair Care',
-    expert: 'Meera Nair',
-    expertImage: 'https://randomuser.me/api/portraits/women/68.jpg',
-    expertRating: 4.8,
-    date: 'Mon, 17 Feb 2026',
-    time: '03:00 PM',
-    duration: '60 min',
-    address: 'Bandra West, Mumbai',
-    price: 899,
-    status: 'completed',
-    image: 'https://picsum.photos/id/1015/400/300',
-  },
-  {
-    id: 'AMARA-003',
-    service: 'Aromatherapy Bliss Session',
-    category: 'Spa & Massage',
-    expert: 'Sunita Rao',
-    expertImage: 'https://randomuser.me/api/portraits/women/55.jpg',
-    expertRating: 4.9,
-    date: 'Tue, 10 Feb 2026',
-    time: '10:00 AM',
-    duration: '120 min',
-    address: 'Lower Parel, Mumbai',
-    price: 3499,
-    status: 'completed',
-    image: 'https://picsum.photos/id/274/400/300',
-  },
-  {
-    id: 'AMARA-004',
-    service: 'Gel Nail Extension Full Set',
-    category: 'Nail Art',
-    expert: 'Kavya Patel',
-    expertImage: 'https://randomuser.me/api/portraits/women/33.jpg',
-    expertRating: 4.7,
-    date: 'Wed, 5 Feb 2026',
-    time: '02:00 PM',
-    duration: '120 min',
-    address: 'Bandra West, Mumbai',
-    price: 2099,
-    status: 'cancelled',
-    image: 'https://picsum.photos/id/133/400/300',
-  },
-];
-
 const statusConfig: Record<BookingStatus, { label: string; color: string; bg: string; dot: string; icon: React.ReactNode }> = {
   upcoming:  { label: 'Upcoming',  color: 'text-blue-600',  bg: 'bg-blue-50',  dot: 'bg-blue-500',  icon: <Loader size={12} className="text-blue-600" /> },
   completed: { label: 'Completed', color: 'text-green-600', bg: 'bg-green-50', dot: 'bg-green-500', icon: <CheckCircle size={12} className="text-green-600" /> },
@@ -103,10 +41,38 @@ export default function Bookings() {
   const [activeTab, setActiveTab] = useState<'all' | BookingStatus>('all');
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [apiBookings, setApiBookings] = useState<APIBooking[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const upcoming = mockBookings.filter((b) => b.status === 'upcoming').length;
+  useEffect(() => {
+    bookingsAPI.list()
+      .then(({ data }) => setApiBookings(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-  const filtered = mockBookings
+  const allBookings: Booking[] = apiBookings.map((b) => ({
+    id: b.id,
+    service: b.service_name ?? 'Service',
+    category: '',
+    expert: b.provider_name ?? 'Pending Assignment',
+    expertImage: '',
+    expertRating: 0,
+    date: b.date,
+    time: b.time,
+    duration: '',
+    address: b.address,
+    price: b.total_price,
+    status: (
+      b.status === 'completed' ? 'completed' :
+      b.status === 'cancelled' ? 'cancelled' : 'upcoming'
+    ) as BookingStatus,
+    image: '',
+  }));
+
+  const upcoming = allBookings.filter((b) => b.status === 'upcoming').length;
+
+  const filtered = allBookings
     .filter((b) => activeTab === 'all' || b.status === activeTab)
     .filter((b) =>
       b.service.toLowerCase().includes(search.toLowerCase()) ||
@@ -214,9 +180,9 @@ export default function Bookings() {
             {/* Stats */}
             <div className="flex gap-3">
               {[
-                { val: mockBookings.length, label: 'Total' },
+                { val: allBookings.length, label: 'Total' },
                 { val: upcoming,            label: 'Upcoming' },
-                { val: mockBookings.filter(b => b.status === 'completed').length, label: 'Completed' },
+                { val: allBookings.filter(b => b.status === 'completed').length, label: 'Completed' },
               ].map((s) => (
                 <div key={s.label} className="bk-stat">
                   <div className="playfair text-gray-800 font-semibold" style={{ fontSize:'1.6rem' }}>{s.val}</div>

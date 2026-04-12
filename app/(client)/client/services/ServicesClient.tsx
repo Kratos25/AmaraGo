@@ -5,16 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Clock, Star, Filter, X, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { categoriesAPI, servicesAPI, type Category } from '@/lib/api';
 
-interface Service {
-  id: number;
+interface ServiceItem {
+  id: string;
   name: string;
   category: string;
   duration: number;
   rating: number;
   discountedPrice: number;
   originalPrice: number;
-  image: string;
 }
 
 interface Filters {
@@ -26,50 +26,45 @@ interface Filters {
   sortBy: string;
 }
 
-const categoryList = [
-  { name: 'All', icon: '🌟' },
-  { name: 'Hair Care', icon: '✂️' },
-  { name: 'Skin Care', icon: '🧴' },
-  { name: 'Makeup', icon: '💄' },
-  { name: 'Nail Art', icon: '💅' },
-  { name: 'Spa & Massage', icon: '🧖‍♀️' },
-  { name: 'Waxing', icon: '🪒' },
-];
-
-const allServices: Service[] = [
-  { id: 1,  name: 'Classic Haircut + Blow Dry',      category: 'Hair Care',    duration: 60,  rating: 4.8, discountedPrice: 899,  originalPrice: 1200,  image: 'https://picsum.photos/id/1015/600/400' },
-  { id: 2,  name: 'Luxury Hair Spa & Mask',           category: 'Hair Care',    duration: 90,  rating: 4.7, discountedPrice: 1499, originalPrice: 1999,  image: 'https://picsum.photos/id/1027/600/400' },
-  { id: 3,  name: 'Keratin Smoothening Treatment',    category: 'Hair Care',    duration: 180, rating: 4.9, discountedPrice: 4999, originalPrice: 6500,  image: 'https://picsum.photos/id/133/600/400'  },
-  { id: 4,  name: 'HydraFacial Signature',            category: 'Skin Care',    duration: 75,  rating: 4.9, discountedPrice: 3299, originalPrice: 4500,  image: 'https://picsum.photos/id/201/600/400'  },
-  { id: 5,  name: 'Deep Cleansing Glow Facial',       category: 'Skin Care',    duration: 60,  rating: 4.6, discountedPrice: 1299, originalPrice: 1800,  image: 'https://picsum.photos/id/251/600/400'  },
-  { id: 6,  name: 'Anti-Ageing Chemical Peel',        category: 'Skin Care',    duration: 45,  rating: 4.8, discountedPrice: 2499, originalPrice: 3200,  image: 'https://picsum.photos/id/274/600/400'  },
-  { id: 7,  name: 'Party Makeup Look',                category: 'Makeup',       duration: 60,  rating: 4.7, discountedPrice: 2499, originalPrice: 3500,  image: 'https://picsum.photos/id/1005/600/400' },
-  { id: 8,  name: 'Full Bridal Makeup + Trial',       category: 'Makeup',       duration: 150, rating: 4.9, discountedPrice: 8999, originalPrice: 12000, image: 'https://picsum.photos/id/1011/600/400' },
-  { id: 9,  name: 'Airbrush HD Makeup',               category: 'Makeup',       duration: 90,  rating: 4.8, discountedPrice: 3999, originalPrice: 5000,  image: 'https://picsum.photos/id/102/600/400'  },
-  { id: 10, name: 'Gel Nail Extension Full Set',      category: 'Nail Art',     duration: 120, rating: 4.7, discountedPrice: 2099, originalPrice: 2800,  image: 'https://picsum.photos/id/133/600/400'  },
-  { id: 11, name: 'Luxury Manicure + Pedicure',       category: 'Nail Art',     duration: 90,  rating: 4.8, discountedPrice: 1599, originalPrice: 2200,  image: 'https://picsum.photos/id/160/600/400'  },
-  { id: 12, name: '3D Nail Art Design',               category: 'Nail Art',     duration: 45,  rating: 4.6, discountedPrice: 799,  originalPrice: 1200,  image: 'https://picsum.photos/id/201/600/400'  },
-  { id: 13, name: 'Swedish Full Body Massage',        category: 'Spa & Massage', duration: 90, rating: 4.6, discountedPrice: 2499, originalPrice: 3500,  image: 'https://picsum.photos/id/251/600/400'  },
-  { id: 14, name: 'Aromatherapy Bliss Session',       category: 'Spa & Massage', duration: 120,rating: 4.9, discountedPrice: 3499, originalPrice: 4500,  image: 'https://picsum.photos/id/274/600/400'  },
-  { id: 15, name: 'Hot Stone Therapy',                category: 'Spa & Massage', duration: 75, rating: 4.7, discountedPrice: 2899, originalPrice: 3800,  image: 'https://picsum.photos/id/1015/600/400' },
-  { id: 16, name: 'Full Legs Waxing',                 category: 'Waxing',       duration: 60,  rating: 4.5, discountedPrice: 1299, originalPrice: 1700,  image: 'https://picsum.photos/id/1027/600/400' },
-  { id: 17, name: 'Brazilian Wax',                    category: 'Waxing',       duration: 45,  rating: 4.8, discountedPrice: 899,  originalPrice: 1200,  image: 'https://picsum.photos/id/133/600/400'  },
-  { id: 18, name: 'Full Body Waxing',                 category: 'Waxing',       duration: 180, rating: 4.4, discountedPrice: 3999, originalPrice: 5500,  image: 'https://picsum.photos/id/201/600/400'  },
-];
-
 export default function Services() {
   const router = useRouter();
-   const searchParams = useSearchParams();
+  const searchParams = useSearchParams();
   const categoryFromUrl = searchParams.get('category');
   const [activeCategory, setActiveCategory] = useState<string>(categoryFromUrl || 'All');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showFilterModal, setShowFilterModal] = useState<boolean>(false);
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [categoryList, setCategoryList] = useState<{ name: string; icon: string }[]>([{ name: 'All', icon: '🌟' }]);
+  const [allServices, setAllServices] = useState<ServiceItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([categoriesAPI.list(), servicesAPI.list({ active: true })])
+      .then(([catRes, svcRes]) => {
+        const cats = catRes.data;
+        setCategoryList([{ name: 'All', icon: '🌟' }, ...cats.map((c) => ({ name: c.name, icon: c.icon || '✨' }))]);
+
+        const catMap: Record<string, string> = {};
+        cats.forEach((c) => { catMap[c.id] = c.name; });
+
+        setAllServices(svcRes.data.map((s) => ({
+          id: s.id,
+          name: s.name,
+          category: catMap[s.category_id] ?? '',
+          duration: parseInt(String(s.duration)) || 0,
+          rating: s.rating ?? 0,
+          discountedPrice: s.discounted_price ?? s.base_price,
+          originalPrice: s.base_price,
+        })));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   const [filters, setFilters] = useState<Filters>({
     minRating: 0,
     minPrice: 0,
-    maxPrice: 12000,
+    maxPrice: 50000,
     minDuration: 0,
     maxDuration: 300,
     sortBy: 'rating',
@@ -77,13 +72,13 @@ export default function Services() {
 
   const [appliedFilters, setAppliedFilters] = useState<Filters>(filters);
 
-  const toggleFavorite = (id: number) => {
+  const toggleFavorite = (id: string) => {
     setFavorites((prev) => prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]);
   };
 
   const resetFilters = () => {
     const defaultFilters: Filters = {
-      minRating: 0, minPrice: 0, maxPrice: 12000,
+      minRating: 0, minPrice: 0, maxPrice: 50000,
       minDuration: 0, maxDuration: 300, sortBy: 'rating',
     };
     setFilters(defaultFilters);
@@ -101,7 +96,7 @@ export default function Services() {
     }
   }, [categoryFromUrl]);
 
-  let filteredServices = allServices
+  let filteredServices: ServiceItem[] = allServices
     .filter((s) => activeCategory === 'All' || s.category === activeCategory)
     .filter((s) => s.name.toLowerCase().includes(searchTerm.toLowerCase()))
     .filter((s) => s.rating >= appliedFilters.minRating)
@@ -116,8 +111,7 @@ export default function Services() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="fixed inset-x-0 top-0 z-50 bg-white shadow-sm">
-        <div className="px-4 py-4 max-w-7xl mx-auto">
+      <header className="fixed inset-x-0 top-0 z-50 bg-white shadow-sm">        <div className="px-4 py-4 max-w-7xl mx-auto">
           <div className="flex items-center gap-3 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -172,19 +166,28 @@ export default function Services() {
           </div>
         </div>
 
-        {/* Services Grid */}
-        {filteredServices.length > 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-3xl overflow-hidden shadow-sm animate-pulse">
+                <div className="h-56 bg-gray-200" />
+                <div className="p-5 space-y-3">
+                  <div className="h-4 bg-gray-200 rounded w-3/4" />
+                  <div className="h-3 bg-gray-200 rounded w-1/2" />
+                  <div className="h-8 bg-gray-200 rounded w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredServices.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredServices.map((service) => {
-              const discount = Math.round(((service.originalPrice - service.discountedPrice) / service.originalPrice) * 100);
+              const discount = service.originalPrice > service.discountedPrice
+                ? Math.round(((service.originalPrice - service.discountedPrice) / service.originalPrice) * 100)
+                : 0;
               return (
                 <div key={service.id} className="bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 group">
-                  <div className="relative">
-                    <img
-                      src={service.image}
-                      alt={service.name}
-                      className="w-full h-56 object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+                  <div className="relative bg-gradient-to-br from-[#fce7ef] to-[#f9d0db] h-32 flex items-center justify-center">
                     {discount > 0 && (
                       <div className="absolute top-4 right-4 bg-[#e5849c] text-white text-xs font-bold px-3 py-1 rounded-full">
                         {discount}% OFF
@@ -193,6 +196,7 @@ export default function Services() {
                     <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1">
                       <Clock size={14} /> {service.duration} min
                     </div>
+                    <span className="text-5xl">✨</span>
                   </div>
 
                   <div className="p-5">
@@ -212,7 +216,7 @@ export default function Services() {
                     <div className="flex items-center gap-4 text-sm mb-4">
                       <div className="flex items-center gap-1">
                         <Star size={18} className="text-amber-500 fill-amber-500" />
-                        <span className="font-semibold">{service.rating}</span>
+                        <span className="font-semibold">{service.rating > 0 ? service.rating : 'New'}</span>
                       </div>
                       <div className="text-gray-400">•</div>
                       <div className="text-gray-600">{service.category}</div>
@@ -221,7 +225,9 @@ export default function Services() {
                     <div className="flex items-end justify-between">
                       <div>
                         <div className="text-3xl font-bold text-[#e5849c]">₹{service.discountedPrice}</div>
-                        <div className="text-sm text-gray-400 line-through">₹{service.originalPrice}</div>
+                        {service.originalPrice > service.discountedPrice && (
+                          <div className="text-sm text-gray-400 line-through">₹{service.originalPrice}</div>
+                        )}
                       </div>
                       <Button
                         onClick={() => router.push(`/client/services/${service.id}`)}

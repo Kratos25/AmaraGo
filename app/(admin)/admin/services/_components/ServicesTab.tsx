@@ -1,20 +1,20 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Plus, Edit3, Trash2, Check, X, Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
 import {
   Service, Category,
-  SEED_SERVICES, SEED_CATEGORIES,
   InlineInput, InlineSelect, Toggle,
 } from './shared';
+import { servicesAPI, categoriesAPI, type Service as APIService, type Category as APICategory } from '@/lib/api';
 
 export default function ServicesTab() {
   const { toast } = useToast();
-  const categories                  = SEED_CATEGORIES;
-  const [services, setServices]     = useState<Service[]>(SEED_SERVICES);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [services, setServices]     = useState<Service[]>([]);
   const [search, setSearch]         = useState('');
   const [catFilter, setCatFilter]   = useState('all');
   const [adding, setAdding]         = useState(false);
@@ -23,6 +23,24 @@ export default function ServicesTab() {
     name: '', categoryId: '', duration: '',
     basePrice: '', discountedPrice: '', description: '',
   });
+
+  useEffect(() => {
+    categoriesAPI.list()
+      .then(({ data }) => setCategories(data.map((c: APICategory) => ({
+        id: c.id, name: c.name, icon: c.icon, serviceCount: c.service_count,
+        active: c.active, description: c.description,
+      }))))
+      .catch(() => {});
+
+    servicesAPI.list()
+      .then(({ data }) => setServices(data.map((s: APIService) => ({
+        id: s.id, name: s.name, categoryId: s.category_id,
+        duration: s.duration, basePrice: s.base_price, discountedPrice: s.discounted_price,
+        description: s.description, active: s.active, popular: s.popular,
+        rating: s.rating, bookings: s.total_bookings,
+      }))))
+      .catch(() => {});
+  }, []);
 
   const resetDraft = () => setDraft({ name: '', categoryId: '', duration: '', basePrice: '', discountedPrice: '', description: '' });
 
@@ -35,23 +53,38 @@ export default function ServicesTab() {
   const getCatName = (id: string) => categories.find((c) => c.id === id)?.name ?? '—';
   const getCatIcon = (id: string) => categories.find((c) => c.id === id)?.icon ?? '';
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!draft.name.trim() || !draft.categoryId) return;
     const base = parseInt(draft.basePrice) || 0;
     const disc = parseInt(draft.discountedPrice) || undefined;
-    if (editId) {
-      setServices((p) => p.map((s) => s.id === editId
-        ? { ...s, ...draft, basePrice: base, discountedPrice: disc } : s));
-      toast({ title: 'Service updated' });
-      setEditId(null);
-    } else {
-      setServices((p) => [...p, {
-        id: `s${Date.now()}`, name: draft.name, categoryId: draft.categoryId,
-        duration: draft.duration, basePrice: base, discountedPrice: disc,
-        description: draft.description, rating: 0, bookings: 0, active: true, popular: false,
-      }]);
-      toast({ title: 'Service added ✓' });
-      setAdding(false);
+    try {
+      if (editId) {
+        const { data } = await servicesAPI.update(editId, {
+          name: draft.name, category_id: draft.categoryId, duration: draft.duration,
+          base_price: base, discounted_price: disc, description: draft.description,
+        });
+        setServices((p) => p.map((s) => s.id === editId
+          ? { ...s, name: data.name, categoryId: data.category_id, duration: data.duration,
+              basePrice: data.base_price, discountedPrice: data.discounted_price,
+              description: data.description } : s));
+        toast({ title: 'Service updated' });
+        setEditId(null);
+      } else {
+        const { data } = await servicesAPI.create({
+          name: draft.name, category_id: draft.categoryId, duration: draft.duration,
+          base_price: base, discounted_price: disc, description: draft.description,
+          active: true, popular: false,
+        } as any);
+        setServices((p) => [...p, {
+          id: data.id, name: data.name, categoryId: data.category_id,
+          duration: data.duration, basePrice: data.base_price, discountedPrice: data.discounted_price,
+          description: data.description, rating: 0, bookings: 0, active: true, popular: false,
+        }]);
+        toast({ title: 'Service added ✓' });
+        setAdding(false);
+      }
+    } catch {
+      toast({ title: 'Failed to save service', variant: 'destructive' });
     }
     resetDraft();
   };
@@ -60,6 +93,25 @@ export default function ServicesTab() {
     setDraft({ name: s.name, categoryId: s.categoryId, duration: s.duration, basePrice: String(s.basePrice), discountedPrice: String(s.discountedPrice ?? ''), description: s.description });
     setEditId(s.id);
     setAdding(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await servicesAPI.delete(id);
+      setServices((p) => p.filter((s) => s.id !== id));
+      toast({ title: 'Service deleted' });
+    } catch {
+      toast({ title: 'Failed to delete', variant: 'destructive' });
+    }
+  };
+
+  const handleToggleActive = async (id: string, active: boolean) => {
+    try {
+      await servicesAPI.update(id, { active });
+      setServices((p) => p.map((s) => s.id === id ? { ...s, active } : s));
+    } catch {
+      toast({ title: 'Failed to update', variant: 'destructive' });
+    }
   };
 
   const catOptions = [
@@ -173,14 +225,14 @@ export default function ServicesTab() {
                     <p className="text-[10px] text-[#9CA3AF]">{s.bookings.toLocaleString()} bookings</p>
                   </td>
                   <td className="px-4 py-3">
-                    <Toggle checked={s.active} onChange={(v) => setServices((p) => p.map((x) => x.id === s.id ? { ...x, active: v } : x))} />
+                    <Toggle checked={s.active} onChange={(v) => handleToggleActive(s.id, v)} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => startEdit(s)} className="w-7 h-7 rounded-lg bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-[#FFF0EC] hover:text-[#C84B31] transition-colors">
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => { setServices((p) => p.filter((x) => x.id !== s.id)); toast({ title: 'Service removed' }); }} className="w-7 h-7 rounded-lg bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-red-50 hover:text-red-500 transition-colors">
+                      <button onClick={() => handleDelete(s.id)} className="w-7 h-7 rounded-lg bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-red-50 hover:text-red-500 transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>

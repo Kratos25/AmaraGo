@@ -8,31 +8,13 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { bookingsAPI, couponsAPI, servicesAPI, addressesAPI, type Address as APIAddress } from '@/lib/api';
 
-interface Service {
-  id: number; name: string; category: string; duration: number;
-  rating: number; discountedPrice: number; originalPrice: number; image: string;
+interface LocalService {
+  id: string; name: string; category: string; duration: string;
+  rating: number; discountedPrice: number; originalPrice: number;
 }
-interface Address { id: number; label: string; address: string; icon: string; }
 interface PaymentOption { id: string; label: string; icon: string; subtitle: string; }
-
-const allServices: Service[] = [
-  { id: 1,  name: 'Classic Haircut + Blow Dry',   category: 'Hair Care',     duration: 60,  rating: 4.8, discountedPrice: 899,  originalPrice: 1200,  image: 'https://picsum.photos/id/1015/600/400' },
-  { id: 2,  name: 'Luxury Hair Spa & Mask',        category: 'Hair Care',     duration: 90,  rating: 4.7, discountedPrice: 1499, originalPrice: 1999,  image: 'https://picsum.photos/id/1027/600/400' },
-  { id: 3,  name: 'Keratin Smoothening Treatment', category: 'Hair Care',     duration: 180, rating: 4.9, discountedPrice: 4999, originalPrice: 6500,  image: 'https://picsum.photos/id/133/600/400'  },
-  { id: 4,  name: 'HydraFacial Signature',         category: 'Skin Care',     duration: 75,  rating: 4.9, discountedPrice: 3299, originalPrice: 4500,  image: 'https://picsum.photos/id/201/600/400'  },
-  { id: 5,  name: 'Deep Cleansing Glow Facial',    category: 'Skin Care',     duration: 60,  rating: 4.6, discountedPrice: 1299, originalPrice: 1800,  image: 'https://picsum.photos/id/251/600/400'  },
-  { id: 6,  name: 'Anti-Ageing Chemical Peel',     category: 'Skin Care',     duration: 45,  rating: 4.8, discountedPrice: 2499, originalPrice: 3200,  image: 'https://picsum.photos/id/274/600/400'  },
-  { id: 7,  name: 'Party Makeup Look',             category: 'Makeup',        duration: 60,  rating: 4.7, discountedPrice: 2499, originalPrice: 3500,  image: 'https://picsum.photos/id/1005/600/400' },
-  { id: 8,  name: 'Full Bridal Makeup + Trial',    category: 'Makeup',        duration: 150, rating: 4.9, discountedPrice: 8999, originalPrice: 12000, image: 'https://picsum.photos/id/1011/600/400' },
-  { id: 10, name: 'Gel Nail Extension Full Set',   category: 'Nail Art',      duration: 120, rating: 4.7, discountedPrice: 2099, originalPrice: 2800,  image: 'https://picsum.photos/id/133/600/400'  },
-  { id: 13, name: 'Swedish Full Body Massage',     category: 'Spa & Massage', duration: 90,  rating: 4.6, discountedPrice: 2499, originalPrice: 3500,  image: 'https://picsum.photos/id/251/600/400'  },
-];
-
-const savedAddresses: Address[] = [
-  { id: 1, label: 'Home',   address: 'Bandra West, Mumbai – 400050', icon: '🏠' },
-  { id: 2, label: 'Office', address: 'Lower Parel, Mumbai – 400013', icon: '🏢' },
-];
 
 const paymentOptions: PaymentOption[] = [
   { id: 'upi',    label: 'UPI / GPay',     icon: '📱', subtitle: 'Instant transfer'  },
@@ -47,17 +29,55 @@ export default function Booking() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const serviceId = searchParams.get('serviceId');
-  const service = allServices.find((s) => s.id === parseInt(serviceId ?? '1')) ?? allServices[0];
 
-  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [service, setService]           = useState<LocalService | null>(null);
+  const [apiAddresses, setApiAddresses] = useState<APIAddress[]>([]);
+  const [pageLoading, setPageLoading]   = useState(true);
+  const [currentStep, setCurrentStep]   = useState<number>(1);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
-  const [selectedAddress, setSelectedAddress] = useState<Address>(savedAddresses[0]);
-  const [newAddress, setNewAddress] = useState<string>('');
+  const [selectedAddress, setSelectedAddress] = useState<APIAddress | null>(null);
+  const [newAddress, setNewAddress]           = useState<string>('');
   const [selectedPayment, setSelectedPayment] = useState<string>('upi');
-  const [coupon, setCoupon] = useState<string>('');
+  const [coupon, setCoupon]               = useState<string>('');
   const [appliedCoupon, setAppliedCoupon] = useState<boolean>(false);
-  const [couponError, setCouponError] = useState<boolean>(false);
+  const [couponError, setCouponError]     = useState<boolean>(false);
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!serviceId) { router.back(); return; }
+    Promise.all([servicesAPI.getById(serviceId), addressesAPI.list()])
+      .then(([svcRes, addrRes]) => {
+        const s = svcRes.data;
+        setService({
+          id: s.id,
+          name: s.name,
+          category: s.category_id,
+          duration: s.duration,
+          rating: s.rating,
+          discountedPrice: s.discounted_price ?? s.base_price,
+          originalPrice: s.base_price,
+        });
+        setApiAddresses(addrRes.data);
+        const def = addrRes.data.find((a) => a.is_default) ?? addrRes.data[0] ?? null;
+        setSelectedAddress(def);
+      })
+      .catch(() => router.back())
+      .finally(() => setPageLoading(false));
+  }, [serviceId]);
+
+  if (pageLoading || !service) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full border-4 border-pink-100 border-t-[#e5849c] animate-spin" />
+      </div>
+    );
+  }
+
+  const subtotal = service.discountedPrice;
+  const convFee  = 99;
+  const total    = subtotal - discountAmount + convFee;
+  const savings  = service.originalPrice - service.discountedPrice;
 
   const dates = Array.from({ length: 7 }, (_, i) => {
     const date = new Date();
@@ -83,27 +103,7 @@ export default function Booking() {
     { time: '06:00 PM', period: 'Evening'   },
   ];
 
-  const subtotal       = service.discountedPrice;
-  const discountAmount = appliedCoupon ? Math.round(subtotal * 0.15) : 0;
-  const convFee        = 99;
-  const total          = subtotal - discountAmount + convFee;
-  const savings        = service.originalPrice - service.discountedPrice;
-  const periods        = ['Morning', 'Noon', 'Afternoon', 'Evening'];
-
-  const handleApplyCoupon = () => {
-    if (coupon === 'WELCOME20') { setAppliedCoupon(true); setCouponError(false); }
-    else { setCouponError(true); setAppliedCoupon(false); }
-  };
-
-  const handleConfirmBooking = () => {
-    const bookingData = {
-      service, date: selectedDate, time: selectedTime,
-      address: selectedAddress.address, total, payment: selectedPayment,
-      bookingId: 'AMARA-' + Date.now().toString().slice(-6),
-    };
-    sessionStorage.setItem('currentBooking', JSON.stringify(bookingData));
-    router.push('/client/bookings/status');
-  };
+  const periods = ['Morning', 'Noon', 'Afternoon', 'Evening'];
 
   return (
     <div className="min-h-screen bg-[#fdf6f8]">
@@ -161,12 +161,14 @@ export default function Booking() {
       {/* ── Always-visible Service Pill ── */}
       <div className="max-w-2xl mx-auto px-4 pt-5">
         <div className="flex items-center gap-4 bg-white rounded-2xl p-3 shadow-sm border border-pink-50">
-          <img src={service.image} alt={service.name} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
+          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#e5849c] to-[#E5AFBC] flex-shrink-0 flex items-center justify-center text-white font-bold text-lg">
+            {service.name.charAt(0)}
+          </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-gray-900 text-sm truncate">{service.name}</p>
             <div className="flex items-center gap-3 mt-1">
               <span className="flex items-center gap-1 text-xs text-gray-500">
-                <Timer size={11} /> {service.duration} min
+                <Timer size={11} /> {service.duration}
               </span>
               <span className="text-xs font-bold text-[#e5849c]">₹{service.discountedPrice}</span>
               <span className="text-xs text-gray-400 line-through">₹{service.originalPrice}</span>
@@ -290,12 +292,15 @@ export default function Booking() {
                 <h2 className="font-bold text-gray-900">Saved Addresses</h2>
               </div>
               <div className="px-5 pb-5 space-y-3">
-                {savedAddresses.map((addr) => (
+                {apiAddresses.length === 0 && (
+                  <p className="text-sm text-gray-400 py-2">No saved addresses. Add one below.</p>
+                )}
+                {apiAddresses.map((addr) => (
                   <button
                     key={addr.id}
                     onClick={() => setSelectedAddress(addr)}
                     className={`w-full text-left p-4 rounded-2xl border-2 transition-all duration-200 flex items-center gap-4 ${
-                      selectedAddress.id === addr.id
+                      selectedAddress?.id === addr.id
                         ? 'border-[#e5849c] bg-pink-50'
                         : 'border-gray-100 bg-gray-50 hover:border-pink-200'
                     }`}
@@ -308,7 +313,7 @@ export default function Booking() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-gray-900">{addr.label}</p>
-                        {selectedAddress.id === addr.id && (
+                        {selectedAddress?.id === addr.id && (
                           <span className="text-[10px] font-bold text-[#e5849c] bg-pink-100 px-2 py-0.5 rounded-full">
                             Selected
                           </span>
@@ -317,9 +322,9 @@ export default function Booking() {
                       <p className="text-sm text-gray-500 mt-0.5 truncate">{addr.address}</p>
                     </div>
                     <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                      selectedAddress.id === addr.id ? 'border-[#e5849c] bg-[#e5849c]' : 'border-gray-300'
+                      selectedAddress?.id === addr.id ? 'border-[#e5849c] bg-[#e5849c]' : 'border-gray-300'
                     }`}>
-                      {selectedAddress.id === addr.id && <div className="w-2 h-2 rounded-full bg-white" />}
+                      {selectedAddress?.id === addr.id && <div className="w-2 h-2 rounded-full bg-white" />}
                     </div>
                   </button>
                 ))}
@@ -343,7 +348,7 @@ export default function Booking() {
                 <button
                   className="mt-3 text-sm font-semibold text-[#e5849c] flex items-center gap-1"
                   onClick={() => {
-                    setSelectedAddress({ id: 99, label: 'Other', address: newAddress, icon: '📍' });
+                    setSelectedAddress({ id: 'custom', client_id: '', label: 'Other', address: newAddress, icon: '📍', is_default: false });
                     setNewAddress('');
                   }}
                 >
@@ -356,8 +361,7 @@ export default function Booking() {
             <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-2xl p-4 border border-pink-100">
               <p className="text-xs text-gray-500 mb-1">Your appointment</p>
               <p className="text-sm font-bold text-gray-800">{selectedDate} · {selectedTime}</p>
-              <p className="text-xs text-[#e5849c] font-medium mt-1">{service.name}</p>
-            </div>
+              <p className="text-xs text-[#e5849c] font-medium mt-1">{service.name}</p>            </div>
           </>
         )}
 
@@ -375,11 +379,9 @@ export default function Booking() {
                 style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, white 0%, transparent 60%)' }}
               />
               <div className="relative flex gap-4">
-                <img
-                  src={service.image}
-                  alt={service.name}
-                  className="w-20 h-20 rounded-2xl object-cover ring-2 ring-white/30"
-                />
+                <div className="w-20 h-20 rounded-2xl bg-white/20 ring-2 ring-white/30 flex items-center justify-center text-3xl font-bold text-white flex-shrink-0">
+                  {service.name.charAt(0)}
+                </div>
                 <div className="flex-1">
                   <span className="text-[10px] font-bold text-pink-200 uppercase tracking-widest">
                     {service.category}
@@ -399,7 +401,7 @@ export default function Booking() {
               </div>
               <div className="relative mt-3 pt-3 border-t border-white/20 flex items-center gap-2">
                 <MapPin size={13} className="text-pink-200 flex-shrink-0" />
-                <p className="text-xs text-pink-100 font-medium">{selectedAddress.address}</p>
+                <p className="text-xs text-pink-100 font-medium">{selectedAddress?.address ?? newAddress}</p>
               </div>
             </section>
 
@@ -437,11 +439,11 @@ export default function Booking() {
               ) : (
                 <div className="flex items-center justify-between bg-green-50 rounded-2xl px-4 py-3 border border-green-100">
                   <div>
-                    <p className="text-sm font-bold text-green-700">🎉 WELCOME20 applied!</p>
+                    <p className="text-sm font-bold text-green-700">🎉 {coupon.toUpperCase()} applied!</p>
                     <p className="text-xs text-green-600 mt-0.5">You saved ₹{discountAmount}</p>
                   </div>
                   <button
-                    onClick={() => { setAppliedCoupon(false); setCoupon(''); }}
+                    onClick={() => { setAppliedCoupon(false); setCoupon(''); setDiscountAmount(0); }}
                     className="text-xs text-gray-400 hover:text-red-400 font-medium"
                   >
                     Remove
@@ -449,7 +451,7 @@ export default function Booking() {
                 </div>
               )}
               {couponError && (
-                <p className="text-xs text-red-500 mt-2 font-medium">Invalid code. Try WELCOME20</p>
+                <p className="text-xs text-red-500 mt-2 font-medium">Invalid or expired coupon code.</p>
               )}
             </section>
 
@@ -507,7 +509,7 @@ export default function Booking() {
                 )}
                 {appliedCoupon && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-green-600">Coupon (WELCOME20)</span>
+                    <span className="text-green-600">Coupon ({coupon.toUpperCase()})</span>
                     <span className="font-semibold text-green-600">–₹{discountAmount}</span>
                   </div>
                 )}

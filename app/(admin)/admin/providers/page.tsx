@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search, Filter, Check, X, Star, MapPin, Phone,
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
 import AdminLayout from '../_components/AdminLayout';
+import { providersAPI, type ProviderProfile } from '@/lib/api';
 
 // ─── Design tokens ─────────────────────────────────────────────────────────
 // Primary #C84B31  Tint #FFF0EC/#FDDDD5  Page #F5F4F2
@@ -47,82 +48,31 @@ interface ServiceProvider {
   isOnline: boolean;
 }
 
-// ─── Mock data ───────────────────────────────────────────────────────────────
+// ─── API → local shape mapper ─────────────────────────────────────────────────
 
-const ALL_PROVIDERS: ServiceProvider[] = [
-  {
-    id: 'sp1', name: 'Meera Patel',     emoji: '👩‍🦰', phone: '+91 98765 43210',
-    location: 'Bandra West, Mumbai',  experience: '5 years',
-    specialties: ['Bridal Makeup', 'Party Makeup', 'HD Makeup'],
-    rating: 4.9, reviews: 312, jobsCompleted: 156, jobsThisMonth: 18,
-    earningsTotal: 284000, earningsThisMonth: 32400,
-    responseRate: 97, completionRate: 98,
-    status: 'active', joinedAt: 'Jan 2023', lastActive: '2 min ago', isOnline: true,
-  },
-  {
-    id: 'sp2', name: 'Riya Sharma',     emoji: '👩‍🦱', phone: '+91 98765 11111',
-    location: 'Juhu, Mumbai',         experience: '4 years',
-    specialties: ['Hair Styling', 'Hair Spa', 'Keratin'],
-    rating: 4.7, reviews: 198, jobsCompleted: 124, jobsThisMonth: 14,
-    earningsTotal: 198000, earningsThisMonth: 22500,
-    responseRate: 91, completionRate: 95,
-    status: 'active', joinedAt: 'Mar 2023', lastActive: '1 hr ago', isOnline: true,
-  },
-  {
-    id: 'sp3', name: 'Sunita Verma',    emoji: '🧖‍♀️', phone: '+91 98765 22222',
-    location: 'Andheri West, Mumbai', experience: '6 years',
-    specialties: ['Spa', 'Massage', 'Body Polishing'],
-    rating: 4.8, reviews: 267, jobsCompleted: 189, jobsThisMonth: 21,
-    earningsTotal: 312000, earningsThisMonth: 41200,
-    responseRate: 94, completionRate: 99,
-    status: 'active', joinedAt: 'Nov 2022', lastActive: '30 min ago', isOnline: false,
-  },
-  {
-    id: 'sp4', name: 'Priya Nair',      emoji: '💅', phone: '+91 98765 33333',
-    location: 'Powai, Mumbai',        experience: '3 years',
-    specialties: ['Nail Art', 'Gel Extensions', 'Manicure'],
-    rating: 4.6, reviews: 143, jobsCompleted: 98, jobsThisMonth: 11,
-    earningsTotal: 124000, earningsThisMonth: 14100,
-    responseRate: 88, completionRate: 92,
-    status: 'active', joinedAt: 'Jun 2023', lastActive: '3 hr ago', isOnline: false,
-  },
-  {
-    id: 'sp5', name: 'Kavita Sharma',   emoji: '👩‍🦱', phone: '+91 98765 44444',
-    location: 'Bandra West, Mumbai',  experience: '3 years',
-    specialties: ['Makeup', 'Hair'],
-    rating: 0, reviews: 0, jobsCompleted: 0, jobsThisMonth: 0,
-    earningsTotal: 0, earningsThisMonth: 0,
-    responseRate: 0, completionRate: 0,
-    status: 'pending', joinedAt: '2 hours ago', lastActive: 'Never', isOnline: false,
-  },
-  {
-    id: 'sp6', name: 'Deepika Rao',     emoji: '👩', phone: '+91 98765 55555',
-    location: 'Juhu, Mumbai',         experience: '2 years',
-    specialties: ['Skin Care', 'Waxing'],
-    rating: 0, reviews: 0, jobsCompleted: 0, jobsThisMonth: 0,
-    earningsTotal: 0, earningsThisMonth: 0,
-    responseRate: 0, completionRate: 0,
-    status: 'pending', joinedAt: '5 hours ago', lastActive: 'Never', isOnline: false,
-  },
-  {
-    id: 'sp7', name: 'Anjali Singh',    emoji: '🧖', phone: '+91 98765 66666',
-    location: 'Dadar, Mumbai',        experience: '4 years',
-    specialties: ['Facial', 'Skin Care', 'HydraFacial'],
-    rating: 4.5, reviews: 87, jobsCompleted: 72, jobsThisMonth: 0,
-    earningsTotal: 98000, earningsThisMonth: 0,
-    responseRate: 45, completionRate: 70,
-    status: 'suspended', joinedAt: 'Aug 2023', lastActive: '2 weeks ago', isOnline: false,
-  },
-  {
-    id: 'sp8', name: 'Nisha Gupta',     emoji: '💄', phone: '+91 98765 77777',
-    location: 'Malad West, Mumbai',   experience: '2 years',
-    specialties: ['Bridal', 'Makeup'],
-    rating: 4.3, reviews: 54, jobsCompleted: 41, jobsThisMonth: 0,
-    earningsTotal: 62000, earningsThisMonth: 0,
-    responseRate: 72, completionRate: 84,
-    status: 'inactive', joinedAt: 'Feb 2024', lastActive: '1 month ago', isOnline: false,
-  },
-];
+function mapProvider(p: ProviderProfile): ServiceProvider {
+  return {
+    id:               p.uid,
+    name:             p.name,
+    emoji:            '✨',
+    phone:            p.phone ?? '',
+    location:         p.location ?? '',
+    experience:       p.experience_years ? `${p.experience_years} years` : '—',
+    specialties:      p.services_offered ?? [],
+    rating:           p.rating ?? 0,
+    reviews:          0,
+    jobsCompleted:    p.total_jobs ?? 0,
+    jobsThisMonth:    0,
+    earningsTotal:    0,
+    earningsThisMonth: 0,
+    responseRate:     0,
+    completionRate:   0,
+    status:           p.is_approved ? 'active' : 'pending',
+    joinedAt:         p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—',
+    lastActive:       p.is_online ? 'Online now' : '—',
+    isOnline:         p.is_online ?? false,
+  };
+}
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -331,12 +281,16 @@ export default function AdminServiceProviders() {
   const router   = useRouter();
   const { toast } = useToast();
 
-  const [providers, setProviders] = useState<ServiceProvider[]>(ALL_PROVIDERS);
+  const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [search, setSearch]       = useState('');
   const [sortBy, setSortBy]       = useState<'rating' | 'jobs' | 'earnings' | 'recent'>('recent');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSpecialty, setSelectedSpecialty] = useState('All');
+
+  useEffect(() => {
+    providersAPI.list().then(({ data }) => setProviders(data.map(mapProvider))).catch(() => {});
+  }, []);
 
   // Counts per tab
   const counts: Record<TabKey, number> = useMemo(() => ({
@@ -382,16 +336,26 @@ export default function AdminServiceProviders() {
   }, [providers, activeTab, search, selectedSpecialty, sortBy]);
 
   // Actions
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
     const sp = providers.find((p) => p.id === id);
-    setProviders((prev) => prev.map((p) => p.id === id ? { ...p, status: 'active', joinedAt: 'Just now' } : p));
-    toast({ title: `${sp?.name} approved ✓`, description: 'Provider is now active.' });
+    try {
+      await providersAPI.setApproval(id, true);
+      setProviders((prev) => prev.map((p) => p.id === id ? { ...p, status: 'active', joinedAt: 'Just now' } : p));
+      toast({ title: `${sp?.name} approved ✓`, description: 'Provider is now active.' });
+    } catch {
+      toast({ title: 'Failed to approve', variant: 'destructive' });
+    }
   };
 
-  const handleReject = (id: string) => {
+  const handleReject = async (id: string) => {
     const sp = providers.find((p) => p.id === id);
-    setProviders((prev) => prev.filter((p) => p.id !== id));
-    toast({ title: `${sp?.name} rejected`, description: 'Application has been declined.' });
+    try {
+      await providersAPI.setApproval(id, false);
+      setProviders((prev) => prev.filter((p) => p.id !== id));
+      toast({ title: `${sp?.name} rejected`, description: 'Application has been declined.' });
+    } catch {
+      toast({ title: 'Failed to reject', variant: 'destructive' });
+    }
   };
 
   const handleSuspend = (id: string) => {
