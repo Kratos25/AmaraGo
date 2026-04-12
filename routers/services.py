@@ -51,15 +51,20 @@ async def list_services(
     category_id: Optional[str] = Query(None),
     popular: Optional[bool] = Query(None),
     active: Optional[bool] = Query(None),
+    all: Optional[bool] = Query(None, alias="all"),
 ):
     db = get_db()
     query = db.collection("services")
 
-    # Public endpoint — always return active services only
-    if active is False:
-        query = query.where("active", "==", False)
-    else:
-        query = query.where("active", "==", True)
+    # If `all=true` is explicitly passed (admin use), skip status filter
+    if not all:
+        if active is False:
+            query = query.where("active", "==", False)
+        elif active is True:
+            query = query.where("active", "==", True)
+        else:
+            # Default: active only (public/client view)
+            query = query.where("active", "==", True)
 
     if category_id:
         query = query.where("category_id", "==", category_id)

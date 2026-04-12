@@ -8,7 +8,9 @@ Packages router  —  GET    /packages
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from firebase_config import get_db
 from dependencies.auth import CurrentUser, require_role
@@ -38,9 +40,18 @@ def _doc_to_package(doc) -> PackageResponse:
 
 
 @router.get("", response_model=list[PackageResponse])
-async def list_packages():
+async def list_packages(
+    all: Optional[bool] = Query(None, alias="all"),
+    active: Optional[bool] = Query(None),
+):
     db = get_db()
-    docs = db.collection("packages").where("active", "==", True).stream()
+    query = db.collection("packages")
+    if not all:
+        if active is False:
+            query = query.where("active", "==", False)
+        else:
+            query = query.where("active", "==", True)
+    docs = query.stream()
     return [_doc_to_package(d) for d in docs]
 
 

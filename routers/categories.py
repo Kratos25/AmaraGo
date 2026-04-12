@@ -39,6 +39,19 @@ async def list_categories():
     return [_doc_to_category(d) for d in docs]
 
 
+@router.get("/active", response_model=list[CategoryResponse])
+async def list_active_categories():
+    """Return only active categories — used by the Add Service form."""
+    db = get_db()
+    docs = (
+        db.collection("categories")
+        .where("active", "==", True)
+        .order_by("name")
+        .stream()
+    )
+    return [_doc_to_category(d) for d in docs]
+
+
 @router.post("", response_model=CategoryResponse, status_code=201)
 async def create_category(
     body: CreateCategoryRequest,
