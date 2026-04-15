@@ -308,6 +308,37 @@ async def update_booking_status(
             {"total_jobs": Increment(1)}
         )
 
+    # ── Award loyalty points to client on completion ───────────────────────────
+    if body.status == "completed":
+        POINTS_PER_RUPEE = 0.5
+        total_spent = d.get("total_price", 0)
+        points_earned = round(total_spent * POINTS_PER_RUPEE)
+        client_id = d.get("client_id", "")
+
+        if points_earned > 0 and client_id:
+            from schemas.user import calculate_tier
+
+            # Increment loyalty_points on the user document
+            db.collection("users").document(client_id).update(
+                {"loyalty_points": Increment(points_earned)}
+            )
+
+            # Recalculate tier
+            updated_user = db.collection("users").document(client_id).get().to_dict() or {}
+            new_points = updated_user.get("loyalty_points", 0)
+            new_tier = calculate_tier(new_points)
+            db.collection("users").document(client_id).update({"tier": new_tier})
+
+            # Log transaction
+            db.collection("loyalty_transactions").document().set({
+                "client_id": client_id,
+                "booking_id": booking_id,
+                "points_awarded": points_earned,
+                "amount_spent": total_spent,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "description": f"Earned {points_earned} pts for booking #{booking_id[:8]}",
+            })
+
     return _doc_to_booking(ref.get())
 
 

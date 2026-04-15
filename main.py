@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from routers import auth, users, categories, services, packages, coupons, addresses, bookings, providers, admin
+from routers import auth, users, categories, services, packages, coupons, addresses, bookings, providers, admin, cart, loyalty
 
 load_dotenv()
 
@@ -51,6 +51,8 @@ app.include_router(addresses.router)
 app.include_router(bookings.router)
 app.include_router(providers.router)
 app.include_router(admin.router)
+app.include_router(cart.router)
+app.include_router(loyalty.router)
 
 # ── Health check ──────────────────────────────────────────────────────────────
 
