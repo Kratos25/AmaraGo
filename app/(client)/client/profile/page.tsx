@@ -6,12 +6,13 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/config/context/AuthContext';
 import {
   User, Edit3, Camera, Star, Award, ChevronRight,
-  Bell, Shield, HelpCircle, LogOut, MapPin,
+  Bell, Shield, HelpCircle, LogOut, MapPin, Plus, Trash2,
   Gift, Sparkles, Check, X, Heart,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { usersAPI } from '@/lib/api';
+import { usersAPI, loyaltyAPI } from '@/lib/api';
+import { addressesAPI } from '@/lib/api';
 
 type MenuItemType = {
   icon: React.ReactNode;
@@ -44,6 +45,37 @@ export default function Profile() {
   const [editPhone, setEditPhone]   = useState(phone);
   const [notifications, setNotifs]  = useState(true);
   const [saving, setSaving]         = useState(false);
+  const [showAddresses, setShowAddresses] = useState(false);
+  const [addresses, setAddresses]   = useState<any[]>([]);
+  const [addrsLoading, setAddrsLoading] = useState(false);
+  const [addingAddr, setAddingAddr] = useState(false);
+  const [newAddrLabel, setNewAddrLabel] = useState('');
+  const [newAddrText, setNewAddrText]   = useState('');
+
+  const fetchAddresses = async () => {
+    setAddrsLoading(true);
+    try {
+      const { data } = await addressesAPI.list();
+      setAddresses(data);
+    } catch {}
+    finally { setAddrsLoading(false); }
+  };
+
+  const handleSaveAddress = async () => {
+    if (!newAddrLabel.trim() || !newAddrText.trim()) return;
+    try {
+      await addressesAPI.create({ label: newAddrLabel, address: newAddrText, is_default: addresses.length === 0 });
+      setNewAddrLabel(''); setNewAddrText(''); setAddingAddr(false);
+      fetchAddresses();
+    } catch {}
+  };
+
+  const handleDeleteAddress = async (id: string) => {
+    try {
+      await addressesAPI.delete(id);
+      setAddresses(prev => prev.filter(a => a.id !== id));
+    } catch {}
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -70,9 +102,30 @@ export default function Profile() {
       .catch(() => {});
   }, []);
 
-  const loyaltyPoints  = 1240;
-  const nextTierPoints = 2000;
-  const progress       = Math.round((loyaltyPoints / nextTierPoints) * 100);
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [bookingsCount, setBookingsCount] = useState(0);
+  const [loyaltyTier, setLoyaltyTier]     = useState('Silver');
+  const [tierProgress, setTierProgress]   = useState(0);
+  const [nextTier, setNextTier]           = useState<string | null>('Gold');
+  const [pointsNeeded, setPointsNeeded]   = useState(2000);
+
+  useEffect(() => {
+    import('@/lib/api').then(({ loyaltyAPI }) => {
+      loyaltyAPI.getMe()
+        .then(({ data }) => {
+          setLoyaltyPoints(data.points ?? 0);
+          setLoyaltyTier(data.tier ?? 'Silver');
+          setTierProgress(data.tier_progress ?? 0);
+          setNextTier(data.next_tier ?? null);
+          setPointsNeeded(data.points_needed_for_next_tier ?? 0);
+        })
+        // Also fetch bookings count from profile API
+        .then(() => usersAPI.getMe().then(({ data }) => setBookingsCount((data as any).bookings_count ?? 0)).catch(() => {}))
+        .catch(() => {});
+    });
+  }, []);
+
+  const progress = tierProgress;
 
   const handleSignOut = async () => {
     try {
@@ -88,7 +141,7 @@ export default function Profile() {
     {
       title: 'Account',
       items: [
-        { icon: <MapPin size={17} />, label: 'Saved Addresses', sub: '2 addresses saved' },
+        { icon: <MapPin size={17} />, label: 'Saved Addresses', sub: `${addresses.length} address${addresses.length !== 1 ? 'es' : ''} saved`, action: () => { setShowAddresses(true); fetchAddresses(); } },
         { icon: <Gift size={17} />,   label: 'Refer & Earn',    sub: 'Get ₹200 per referral', badge: 'NEW' },
         { icon: <Heart size={17} />,  label: 'Wishlist',        sub: '3 saved services' },
       ],
@@ -117,6 +170,80 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
+
+      {/* ── Address Manager Drawer ── */}
+      {showAddresses && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <h2 className="font-bold text-lg text-gray-900">Saved Addresses</h2>
+              <button onClick={() => { setShowAddresses(false); setAddingAddr(false); }} className="p-2 rounded-full hover:bg-gray-100">
+                <X size={18} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-3">
+              {addrsLoading ? (
+                <div className="space-y-3">
+                  {[1,2].map(i => <div key={i} className="h-16 bg-gray-100 rounded-2xl animate-pulse" />)}
+                </div>
+              ) : addresses.length === 0 && !addingAddr ? (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <MapPin size={32} className="text-gray-300 mb-3" />
+                  <p className="text-gray-500 text-sm">No saved addresses yet</p>
+                </div>
+              ) : (
+                addresses.map((addr) => (
+                  <div key={addr.id} className="flex items-start gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <span className="text-xl mt-0.5">{addr.icon ?? '📍'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm text-gray-900">{addr.label}</p>
+                        {addr.is_default && <span className="text-[10px] bg-[#e5849c]/15 text-[#e5849c] font-semibold px-2 py-0.5 rounded-full">Default</span>}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5 leading-snug">{addr.address}</p>
+                    </div>
+                    <button onClick={() => handleDeleteAddress(addr.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))
+              )}
+
+              {addingAddr && (
+                <div className="p-4 bg-[#fdf0f3] rounded-2xl border border-[#e5849c]/20 space-y-3">
+                  <input
+                    placeholder="Label (e.g. Home, Office)"
+                    value={newAddrLabel}
+                    onChange={e => setNewAddrLabel(e.target.value)}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40"
+                  />
+                  <textarea
+                    placeholder="Full address"
+                    value={newAddrText}
+                    onChange={e => setNewAddrText(e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 resize-none"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => setAddingAddr(false)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                    <button onClick={handleSaveAddress} className="flex-1 py-2.5 rounded-xl bg-[#e5849c] text-white text-sm font-semibold hover:brightness-90">Save</button>
+                  </div>
+                </div>
+              )}
+            </div>
+            {!addingAddr && (
+              <div className="px-6 py-4 border-t border-gray-100">
+                <button
+                  onClick={() => setAddingAddr(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-[#111827] text-white py-3.5 rounded-2xl text-sm font-semibold hover:bg-[#1f2937] transition-colors"
+                >
+                  <Plus size={16} /> Add New Address
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Dark hero ── */}
       <div className="bg-[#111827] px-4 pt-8 pb-16 md:pt-10 relative overflow-hidden">
@@ -170,9 +297,9 @@ export default function Profile() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { val: '8',     label: 'Bookings', icon: '📅' },
-            { val: '1,240', label: 'Points',   icon: '💎' },
-            { val: '4.9★',  label: 'Rating',   icon: '⭐' },
+            { val: String(bookingsCount), label: 'Bookings', icon: '📅' },
+            { val: loyaltyPoints.toLocaleString('en-IN'), label: 'Points',   icon: '💎' },
+            { val: loyaltyTier,           label: 'Tier',    icon: '⭐' },
           ].map((s) => (
             <div key={s.label} className="bg-white rounded-2xl px-3 py-4 text-center border border-gray-100 shadow-sm">
               <p className="text-xl mb-1">{s.icon}</p>
@@ -203,7 +330,7 @@ export default function Profile() {
           </div>
           <div className="flex justify-between mt-2 relative z-10">
             <span className="text-white/40 text-[10px]">{loyaltyPoints} pts</span>
-            <span className="text-white/60 text-[10px] font-medium">{nextTierPoints - loyaltyPoints} pts to Platinum ✨</span>
+            <span className="text-white/60 text-[10px] font-medium">{pointsNeeded} pts to {nextTier ?? 'Platinum'} ✨</span>
           </div>
         </div>
 

@@ -378,3 +378,37 @@ export const adminAPI = {
   getClientBookings: (uid: string) => api.get<Booking[]>(`/admin/clients/${uid}/bookings`),
   getNotifications: () => api.get<Notification[]>('/admin/notifications'),
 };
+
+// ─── Cart ─────────────────────────────────────────────────────────────────────
+
+export interface CartItemPayload {
+  service_id?: string;
+  package_id?: string;
+  name: string;
+  price: number;
+  duration?: string;
+  quantity?: number;
+  image_url?: string;
+}
+
+export const cartAPI = {
+  get: (headers?: Record<string, string>) =>
+    api.get('/cart', { headers }),
+  add: (item: CartItemPayload, headers?: Record<string, string>) =>
+    api.post('/cart', item, { headers }),
+  update: (itemId: string, quantity: number, headers?: Record<string, string>) =>
+    api.put(`/cart/${itemId}`, { quantity }, { headers }),
+  remove: (itemId: string, headers?: Record<string, string>) =>
+    api.delete(`/cart/${itemId}`, { headers }),
+  clear: (headers?: Record<string, string>) =>
+    api.delete('/cart', { headers }),
+  merge: (guestId: string) =>
+    api.post('/cart/merge', { guest_id: guestId }),
+};
+
+// ─── Loyalty ──────────────────────────────────────────────────────────────────
+
+export const loyaltyAPI = {
+  getMe: () => api.get('/loyalty/me'),
+  getHistory: () => api.get('/loyalty/history'),
+};

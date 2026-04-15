@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, Clock, MapPin, ChevronDown, Search, Star, CheckCircle, XCircle, Loader2, X } from 'lucide-react';
 import { bookingsAPI, type Booking as APIBooking } from '@/lib/api';
+import { BookingListSkeleton } from '@/components/ui/skeletons';
 
 type BookingStatus = 'upcoming' | 'completed' | 'cancelled';
 
@@ -138,20 +139,7 @@ export default function Bookings() {
 
         {/* ── Cards ── */}
         {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 animate-pulse">
-                <div className="flex gap-3">
-                  <div className="w-14 h-14 rounded-xl bg-gray-200 flex-shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4" />
-                    <div className="h-3 bg-gray-100 rounded w-1/2" />
-                    <div className="h-3 bg-gray-100 rounded w-2/3" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <BookingListSkeleton count={4} />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center text-3xl mb-4">📋</div>

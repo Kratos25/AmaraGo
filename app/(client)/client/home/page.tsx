@@ -10,6 +10,14 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { authAPI, couponsAPI, categoriesAPI, packagesAPI, servicesAPI } from '@/lib/api';
+import { useCart } from '@/config/context/CartContext';
+import {
+  BannerSkeleton,
+  CategoryRowSkeleton,
+  PackageRowSkeleton,
+  ServiceListSkeleton,
+  CouponCardSkeleton,
+} from '@/components/ui/skeletons';
 import { useToast } from '@/hooks/use-toast';
 
 interface Coupon {
@@ -66,34 +74,17 @@ function ProviderRegistrationModal({
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
-  const [step, setStep] = useState<1 | 2>(1);
   const [submitting, setSubmitting] = useState(false);
   const [fullName, setFullName] = useState(user.displayName ?? '');
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
   const [experience, setExperience] = useState('');
   const [address, setAddress] = useState('');
-  const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [activeCategory, setActiveCategory] = useState(SERVICE_CATEGORIES[0]);
 
-  const toggleService = (id: string) => {
-    setSelectedServices((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    );
-  };
-
-  const handleStep1Next = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !phone.trim() || !address.trim()) {
       toast({ title: 'Required fields missing', description: 'Please fill all required fields.', variant: 'destructive' });
-      return;
-    }
-    setStep(2);
-  };
-
-  const handleSubmit = async () => {
-    if (selectedServices.length === 0) {
-      toast({ title: 'Select at least one service', variant: 'destructive' });
       return;
     }
     setSubmitting(true);
@@ -107,10 +98,10 @@ function ProviderRegistrationModal({
         id_token: token,
         bio,
         experience_years: parseInt(experience) || 0,
-        services_offered: selectedServices,
+        services_offered: [],
         location: address,
       });
-      toast({ title: 'Provider registration complete! 🎉', description: 'Awaiting admin approval. You can access your provider dashboard now.' });
+      toast({ title: 'Registration complete! 🎉', description: 'Awaiting admin approval. Your dashboard is ready.' });
       onSuccess();
     } catch (err: any) {
       toast({ title: 'Registration failed', description: err?.response?.data?.detail ?? err.message, variant: 'destructive' });
@@ -125,119 +116,54 @@ function ProviderRegistrationModal({
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
           <div>
             <h2 className="font-bold text-xl text-gray-900">Become a Provider</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Step {step} of 2 — {step === 1 ? 'Your Details' : 'Services You Offer'}</p>
+            <p className="text-sm text-gray-500 mt-0.5">Fill in your details to get started</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 transition-colors">
             <X size={20} className="text-gray-500" />
           </button>
         </div>
 
-        <div className="px-6 pt-4 flex-shrink-0">
-          <div className="flex gap-2">
-            <div className={`h-1.5 flex-1 rounded-full transition-colors ${step >= 1 ? 'bg-[#e5849c]' : 'bg-gray-200'}`} />
-            <div className={`h-1.5 flex-1 rounded-full transition-colors ${step >= 2 ? 'bg-[#e5849c]' : 'bg-gray-200'}`} />
-          </div>
-        </div>
-
         <div className="overflow-y-auto flex-1 px-6 py-5">
-          {step === 1 ? (
-            <form id="step1form" onSubmit={handleStep1Next} className="space-y-4">
-              <div>
-                <Label htmlFor="prov-name">Full Name *</Label>
-                <Input id="prov-name" placeholder="Your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="mt-1.5" />
-              </div>
-              <div>
-                <Label htmlFor="prov-phone">Phone Number *</Label>
-                <Input id="prov-phone" type="tel" placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} required className="mt-1.5" />
-              </div>
-              <div>
-                <Label htmlFor="prov-address">Service Area / Address *</Label>
-                <Input id="prov-address" placeholder="e.g. Andheri West, Mumbai" value={address} onChange={(e) => setAddress(e.target.value)} required className="mt-1.5" />
-              </div>
-              <div>
-                <Label htmlFor="prov-exp">Years of Experience</Label>
-                <Input id="prov-exp" placeholder="e.g. 3 years" value={experience} onChange={(e) => setExperience(e.target.value)} className="mt-1.5" />
-              </div>
-              <div>
-                <Label htmlFor="prov-bio">Bio / About You</Label>
-                <textarea
-                  id="prov-bio"
-                  placeholder="Tell clients a bit about yourself..."
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  rows={3}
-                  className="w-full mt-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 resize-none"
-                />
-              </div>
-            </form>
-          ) : (
+          <form id="provform" onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <p className="text-sm text-gray-500 mb-4">Select all the services you can provide. Clients will discover you based on these.</p>
-              <div className="flex gap-2 flex-wrap mb-4">
-                {SERVICE_CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setActiveCategory(cat)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                      activeCategory === cat ? 'bg-[#e5849c] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {ALL_SERVICES.filter((s) => s.category === activeCategory).map((service) => {
-                  const selected = selectedServices.includes(service.id);
-                  return (
-                    <button
-                      key={service.id}
-                      type="button"
-                      onClick={() => toggleService(service.id)}
-                      className={`flex items-center gap-2 p-3 rounded-xl border text-left transition-all ${
-                        selected ? 'border-[#e5849c] bg-[#fdf0f3] text-[#e5849c]' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                        selected ? 'border-[#e5849c] bg-[#e5849c]' : 'border-gray-300'
-                      }`}>
-                        {selected && <Check size={11} className="text-white" strokeWidth={3} />}
-                      </div>
-                      <span className="text-xs font-medium leading-tight">{service.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {selectedServices.length > 0 && (
-                <div className="mt-4 p-3 bg-[#fdf0f3] rounded-xl">
-                  <p className="text-xs text-[#e5849c] font-medium">
-                    {selectedServices.length} service{selectedServices.length !== 1 ? 's' : ''} selected
-                  </p>
-                </div>
-              )}
+              <Label htmlFor="prov-name">Full Name *</Label>
+              <Input id="prov-name" placeholder="Your full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="mt-1.5" />
             </div>
-          )}
+            <div>
+              <Label htmlFor="prov-phone">Phone Number *</Label>
+              <Input id="prov-phone" type="tel" placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} required className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="prov-address">Service Area / Address *</Label>
+              <Input id="prov-address" placeholder="e.g. Andheri West, Mumbai" value={address} onChange={(e) => setAddress(e.target.value)} required className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="prov-exp">Years of Experience</Label>
+              <Input id="prov-exp" placeholder="e.g. 3" value={experience} onChange={(e) => setExperience(e.target.value)} className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="prov-bio">Bio / About You</Label>
+              <textarea
+                id="prov-bio"
+                placeholder="Tell clients a bit about yourself..."
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                className="w-full mt-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 resize-none"
+              />
+            </div>
+          </form>
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0">
-          {step === 1 ? (
-            <Button type="submit" form="step1form" className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white py-6 font-medium">
-              Continue <ChevronRight size={18} className="ml-1" />
-            </Button>
-          ) : (
-            <div className="flex gap-3">
-              <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1 py-6">Back</Button>
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting || selectedServices.length === 0}
-                className="flex-1 bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white py-6 font-medium"
-              >
-                {submitting ? <Loader2 size={18} className="animate-spin" /> : 'Register as Provider'}
-              </Button>
-            </div>
-          )}
+          <Button
+            type="submit"
+            form="provform"
+            disabled={submitting}
+            className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white py-6 font-medium"
+          >
+            {submitting ? <Loader2 size={18} className="animate-spin" /> : 'Register as Provider'}
+          </Button>
         </div>
       </div>
     </div>
@@ -272,6 +198,8 @@ export default function Home() {
   const router = useRouter();
   const { toast } = useToast();
 
+  const { addItem } = useCart();
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [userLocation, setUserLocation] = useState('Mumbai, Maharashtra');
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -286,13 +214,16 @@ export default function Home() {
 
   // Categories, packages, popular services from API
   const [categories, setCategories] = useState<{ name: string; icon: string }[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [packages, setPackages] = useState<{ id: string; name: string; desc: string; time: string; price: string }[]>([]);
+  const [packagesLoading, setPackagesLoading] = useState(true);
   const [popularServices, setPopularServices] = useState<{ id: string; name: string; duration: string; rating: number; discountedPrice: string; originalPrice: string; discount: string }[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
 
   useEffect(() => {
     categoriesAPI.list()
-      .then(({ data }) => setCategories(data.filter((c) => c.active).map((c) => ({ name: c.name, icon: c.icon || '✨' }))))
+      .then(({ data }) => { setCategories(data.filter((c) => c.active).map((c) => ({ name: c.name, icon: c.icon || '✨' }))); setCategoriesLoading(false); })
+      .catch(() => setCategoriesLoading(false))
       .catch(() => {});
 
     packagesAPI.list()
@@ -427,6 +358,24 @@ export default function Home() {
     router.push('/provider');
   };
 
+  const handleAddToCart = async (
+    id: string,
+    name: string,
+    price: number,
+    type: 'service' | 'package',
+    duration?: string
+  ) => {
+    await addItem({
+      [type === 'service' ? 'service_id' : 'package_id']: id,
+      name,
+      price,
+      duration,
+      quantity: 1,
+    });
+    setAddedIds((prev) => new Set(prev).add(id));
+    setTimeout(() => setAddedIds((prev) => { const n = new Set(prev); n.delete(id); return n; }), 2000);
+  };
+
   return (
     <>
       {showProviderModal && currentUser && (
@@ -506,6 +455,43 @@ export default function Home() {
       {/* ── Rest of the page ────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 md:px-8">
 
+
+        {/* ── Promo Banners ─────────────────────────────────────── */}
+        <section className="mt-8">
+          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4 md:mx-0 md:px-0">
+            <div className="flex-shrink-0 w-72 md:w-80 rounded-3xl overflow-hidden bg-gradient-to-br from-[#111827] to-[#1f2937] relative">
+              <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_80%_20%,#e5849c,transparent_60%)]" />
+              <div className="relative p-5">
+                <span className="text-[10px] font-bold text-[#e5849c] uppercase tracking-widest bg-[#e5849c]/15 px-2.5 py-1 rounded-full">New Users</span>
+                <h3 className="text-xl font-extrabold text-white mt-3 mb-1">₹200 off<br />your first booking</h3>
+                <p className="text-white/50 text-xs mb-4">Use code WELCOME200 at checkout</p>
+                <button onClick={() => router.push('/client/services')} className="bg-[#e5849c] text-white text-xs font-bold px-4 py-2 rounded-xl hover:brightness-90 transition">Book Now →</button>
+              </div>
+              <div className="absolute right-0 bottom-0 text-6xl opacity-20 pr-3 pb-2">💆</div>
+            </div>
+            <div className="flex-shrink-0 w-72 md:w-80 rounded-3xl overflow-hidden bg-gradient-to-br from-[#7c3aed] to-[#a855f7] relative">
+              <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_20%_80%,#fff,transparent_50%)]" />
+              <div className="relative p-5">
+                <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest bg-white/15 px-2.5 py-1 rounded-full">Referrals</span>
+                <h3 className="text-xl font-extrabold text-white mt-3 mb-1">Refer a friend,<br />earn ₹200 each</h3>
+                <p className="text-white/60 text-xs mb-4">Share your code. Earn when they book.</p>
+                <button className="bg-white text-[#7c3aed] text-xs font-bold px-4 py-2 rounded-xl hover:brightness-95 transition">Share Code →</button>
+              </div>
+              <div className="absolute right-0 bottom-0 text-6xl opacity-20 pr-3 pb-2">🎁</div>
+            </div>
+            <div className="flex-shrink-0 w-72 md:w-80 rounded-3xl overflow-hidden bg-gradient-to-br from-[#b45309] to-[#d97706] relative">
+              <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_50%_0%,#fff,transparent_60%)]" />
+              <div className="relative p-5">
+                <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest bg-white/15 px-2.5 py-1 rounded-full">Loyalty</span>
+                <h3 className="text-xl font-extrabold text-white mt-3 mb-1">Earn points,<br />unlock rewards</h3>
+                <p className="text-white/60 text-xs mb-4">₹1 spent = 0.5 pts. Gold starts at 2000 pts.</p>
+                <button onClick={() => router.push('/client/profile')} className="bg-white text-[#b45309] text-xs font-bold px-4 py-2 rounded-xl hover:brightness-95 transition">View Tiers →</button>
+              </div>
+              <div className="absolute right-0 bottom-0 text-6xl opacity-20 pr-3 pb-2">💎</div>
+            </div>
+          </div>
+        </section>
+
         {/* ── Categories ────────────────────────────────────────── */}
         {categories.length > 0 && (
           <section className="mt-8">
@@ -532,8 +518,8 @@ export default function Home() {
           <section className="mt-8">
             <SectionHeader title="Today's Offers" />
             <div className="flex gap-4 overflow-x-auto scrollbar-none -mx-4 px-4 md:mx-0 md:px-0">
-              {[1, 2].map((i) => (
-                <div key={i} className="flex-shrink-0 w-72 h-28 rounded-2xl bg-gray-100 animate-pulse" />
+              {[1, 2, 3].map((i) => (
+                <CouponCardSkeleton key={i} />
               ))}
             </div>
           </section>
@@ -611,8 +597,13 @@ export default function Home() {
                         {pkg.time && <p className="text-[10px] text-gray-400 mb-0.5 flex items-center gap-1"><Clock size={10} />{pkg.time}</p>}
                         <p className="text-xl font-extrabold text-[#e5849c]">{pkg.price}</p>
                       </div>
-                      <button className="bg-[#111827] hover:bg-[#1f2937] text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition-colors">
-                        Book
+                      <button
+                        onClick={() => handleAddToCart(pkg.id, pkg.name, parseFloat(pkg.price.replace(/[^0-9.]/g, '')), 'package', pkg.time)}
+                        className={`flex items-center gap-1 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all ${
+                          addedIds.has(pkg.id) ? 'bg-green-500 text-white' : 'bg-[#111827] hover:bg-[#1f2937] text-white'
+                        }`}
+                      >
+                        {addedIds.has(pkg.id) ? '✓ Added' : '+ Add'}
                       </button>
                     </div>
                   </div>
@@ -685,10 +676,15 @@ export default function Home() {
                       )}
                     </div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); router.push(`/client/services/${service.id}`); }}
-                      className="bg-[#e5849c] hover:bg-[#d4738b] text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddToCart(service.id, service.name, typeof service.discountedPrice === 'number' ? service.discountedPrice : parseFloat(String(service.discountedPrice).replace(/[^0-9.]/g,'')), 'service', service.duration);
+                      }}
+                      className={`flex items-center gap-1 text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
+                        addedIds.has(service.id) ? 'bg-green-500 text-white' : 'bg-[#e5849c] hover:bg-[#d4738b] text-white'
+                      }`}
                     >
-                      Book
+                      {addedIds.has(service.id) ? '✓ Added' : '+ Add'}
                     </button>
                   </div>
                 </div>
@@ -706,4 +702,3 @@ export default function Home() {
     </>
   );
 }
-

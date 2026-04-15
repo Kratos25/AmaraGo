@@ -2,17 +2,21 @@
 
 import React, { useState, use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Star, Clock, Heart, Share2, Tag, Sparkles } from 'lucide-react';
+import { ArrowLeft, Star, Clock, Heart, Share2, Tag, Sparkles, ShoppingCart, Check } from 'lucide-react';
 import { servicesAPI, type Service } from '@/lib/api';
-
-
+import { useCart } from '@/config/context/CartContext';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ServiceDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { toast } = useToast();
+  const { addItem } = useCart();
+
   const [service, setService] = useState<Service | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [added, setAdded] = useState(false);
 
   useEffect(() => {
     servicesAPI.getById(id)
@@ -25,6 +29,23 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
   const discount = service?.discounted_price && service?.base_price
     ? Math.round(((service.base_price - service.discounted_price) / service.base_price) * 100)
     : 0;
+
+  // category_id is all we have from the API — display it as-is or look up name
+  const categoryDisplay = service?.category_id ?? '';
+
+  const handleAddToCart = async () => {
+    if (!service) return;
+    await addItem({
+      service_id: service.id,
+      name: service.name,
+      price: discountedPrice,
+      duration: service.duration,
+      quantity: 1,
+    });
+    setAdded(true);
+    toast({ title: `${service.name} added to cart 🛍️` });
+    setTimeout(() => setAdded(false), 2500);
+  };
 
   if (loading) {
     return (
@@ -41,7 +62,6 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
 
       {/* ── Dark hero header ── */}
       <div className="bg-[#111827] relative overflow-hidden">
-        {/* Decorative orbs */}
         <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-40 h-40 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/4 pointer-events-none" />
 
@@ -75,18 +95,20 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
           )}
           <h1 className="text-2xl font-extrabold text-white leading-tight mb-3">{service.name}</h1>
           <div className="flex items-center flex-wrap gap-3">
-            <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full">
-              <Star size={12} className="fill-amber-400 text-amber-400" />
-              <span className="text-white text-xs font-semibold">{service.rating.toFixed(1)}</span>
-            </div>
+            {service.rating > 0 && (
+              <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full">
+                <Star size={12} className="fill-amber-400 text-amber-400" />
+                <span className="text-white text-xs font-semibold">{service.rating.toFixed(1)}</span>
+              </div>
+            )}
             <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full">
               <Clock size={12} className="text-white/70" />
               <span className="text-white text-xs">{service.duration}</span>
             </div>
-            {service.category && (
+            {categoryDisplay && (
               <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full">
                 <Sparkles size={12} className="text-[#e5849c]" />
-                <span className="text-white/80 text-xs">{service.category}</span>
+                <span className="text-white/80 text-xs">{categoryDisplay}</span>
               </div>
             )}
           </div>
@@ -145,10 +167,24 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
 
       {/* ── Sticky bottom CTA ── */}
       <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 px-4 py-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-2xl mx-auto flex gap-3">
+          {/* Add to Cart */}
+          <button
+            onClick={handleAddToCart}
+            className={`flex items-center justify-center gap-2 h-14 px-6 rounded-xl border-2 font-bold text-sm transition-all flex-shrink-0 ${
+              added
+                ? 'border-green-400 bg-green-50 text-green-600'
+                : 'border-[#e5849c]/40 text-[#e5849c] hover:bg-[#fdf0f3]'
+            }`}
+          >
+            {added ? <Check size={18} /> : <ShoppingCart size={18} />}
+            {added ? 'Added!' : 'Add to Cart'}
+          </button>
+
+          {/* Book Now — goes to single-service checkout */}
           <button
             onClick={() => router.push(`/client/bookings/new?serviceId=${service.id}`)}
-            className="w-full h-14 rounded-xl bg-[#111827] hover:bg-[#1f2937] text-white font-bold text-base flex items-center justify-center gap-2 transition-colors"
+            className="flex-1 h-14 rounded-xl bg-[#111827] hover:bg-[#1f2937] text-white font-bold text-base flex items-center justify-center gap-2 transition-colors"
           >
             Book Now · ₹{discountedPrice.toLocaleString('en-IN')}
           </button>

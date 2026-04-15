@@ -4,6 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Clock, Star, X, Heart, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { categoriesAPI, servicesAPI } from '@/lib/api';
+import { useCart } from '@/config/context/CartContext';
+import { ShoppingCart, Check } from 'lucide-react';
+import { ServiceListSkeleton } from '@/components/ui/skeletons';
 
 interface ServiceItem {
   id: string;
@@ -62,6 +65,8 @@ export default function Services() {
     minDuration: 0, maxDuration: 300, sortBy: 'rating',
   });
   const [appliedFilters, setAppliedFilters] = useState<Filters>(filters);
+  const { addItem, items } = useCart();
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([categoriesAPI.list(), servicesAPI.list({ active: true })])
@@ -118,6 +123,19 @@ export default function Services() {
 
   const hasActiveFilters = appliedFilters.minRating > 0 || appliedFilters.minPrice > 0
     || appliedFilters.maxPrice < 50000 || appliedFilters.minDuration > 0 || appliedFilters.maxDuration < 300;
+
+  const handleAddToCart = async (service: ServiceItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await addItem({
+      service_id: service.id,
+      name: service.name,
+      price: service.discountedPrice,
+      duration: `${service.duration} min`,
+      quantity: 1,
+    });
+    setAddedIds((prev) => new Set(prev).add(service.id));
+    setTimeout(() => setAddedIds((prev) => { const next = new Set(prev); next.delete(service.id); return next; }), 2000);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -286,10 +304,17 @@ export default function Services() {
                         )}
                       </div>
                       <button
-                        onClick={(e) => { e.stopPropagation(); router.push(`/client/services/${service.id}`); }}
-                        className="bg-[#e5849c] hover:bg-[#d4738b] text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
+                        onClick={(e) => handleAddToCart(service, e)}
+                        className={`flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
+                          addedIds.has(service.id)
+                            ? 'bg-green-500 text-white'
+                            : 'bg-[#e5849c] hover:bg-[#d4738b] text-white'
+                        }`}
                       >
-                        Book
+                        {addedIds.has(service.id)
+                          ? <><Check size={12} /> Added</>
+                          : <><ShoppingCart size={12} /> Add</>
+                        }
                       </button>
                     </div>
                   </div>

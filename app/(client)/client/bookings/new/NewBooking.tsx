@@ -11,9 +11,15 @@ import { Input } from '@/components/ui/input';
 import { bookingsAPI, couponsAPI, servicesAPI, addressesAPI, type Address as APIAddress } from '@/lib/api';
 
 interface LocalService {
-  id: string; name: string; category: string; duration: string;
-  rating: number; discountedPrice: number; originalPrice: number;
+  id: string;
+  name: string;
+  category: string;
+  duration: string;
+  rating: number;
+  discountedPrice: number;
+  originalPrice: number;
 }
+
 interface PaymentOption { id: string; label: string; icon: string; subtitle: string; }
 
 const paymentOptions: PaymentOption[] = [
@@ -24,6 +30,8 @@ const paymentOptions: PaymentOption[] = [
 ];
 
 const STEPS = ['Date & Time', 'Address', 'Summary'];
+
+type PaymentMethod = 'upi' | 'card' | 'wallet' | 'cash';
 
 export default function Booking() {
   const router = useRouter();
@@ -36,13 +44,15 @@ export default function Booking() {
   const [currentStep, setCurrentStep]   = useState<number>(1);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
+  // Fix: typed as APIAddress | null, never a plain object without proper fields
   const [selectedAddress, setSelectedAddress] = useState<APIAddress | null>(null);
   const [newAddress, setNewAddress]           = useState<string>('');
-  const [selectedPayment, setSelectedPayment] = useState<string>('upi');
-  const [coupon, setCoupon]               = useState<string>('');
-  const [appliedCoupon, setAppliedCoupon] = useState<boolean>(false);
-  const [couponError, setCouponError]     = useState<boolean>(false);
-  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  // Fix: typed as PaymentMethod, not string
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('upi');
+  const [coupon, setCoupon]                   = useState<string>('');
+  const [appliedCoupon, setAppliedCoupon]     = useState<boolean>(false);
+  const [couponError, setCouponError]         = useState<boolean>(false);
+  const [discountAmount, setDiscountAmount]   = useState<number>(0);
 
   useEffect(() => {
     if (!serviceId) { router.back(); return; }
@@ -52,7 +62,7 @@ export default function Booking() {
         setService({
           id: s.id,
           name: s.name,
-          category: s.category_id,
+          category: s.category_id,     // category_id is the correct field
           duration: s.duration,
           rating: s.rating,
           discountedPrice: s.discounted_price ?? s.base_price,
@@ -74,14 +84,17 @@ export default function Booking() {
     );
   }
 
-  const handleApplyCoupon = () => {
-    const valid: Record<string, number> = { WELCOME20: 200, AMARA10: 100, BEAUTY50: 50 };
-    const discount = valid[coupon.toUpperCase()];
-    if (discount) {
-      setDiscountAmount(discount);
-      setAppliedCoupon(true);
-      setCouponError(false);
-    } else {
+  const handleApplyCoupon = async () => {
+    try {
+      const { data } = await couponsAPI.validate(coupon, subtotal);
+      if (data.valid) {
+        setDiscountAmount(data.discount_amount ?? 0);
+        setAppliedCoupon(true);
+        setCouponError(false);
+      } else {
+        setCouponError(true);
+      }
+    } catch {
       setCouponError(true);
     }
   };
@@ -93,21 +106,29 @@ export default function Booking() {
 
   const handleConfirmBooking = async () => {
     if (!selectedDate || !selectedTime || !serviceId) return;
-    const addressId = selectedAddress?.id ?? null;
+
+    // Fix: use address_id (string | undefined) and address_text (string | undefined)
+    // null → undefined so types match the bookingsAPI.create signature
+    const addressId: string | undefined   = selectedAddress?.id ?? undefined;
+    const addressText: string | undefined = !addressId
+      ? (newAddress.trim() || undefined)
+      : undefined;
+
     try {
       const { data } = await bookingsAPI.create({
-        service_id: serviceId,
-        scheduled_date: selectedDate,
-        scheduled_time: selectedTime,
-        address_id: addressId,
-        address_text: !addressId ? (selectedAddress?.address ?? newAddress) : undefined,
-        payment_method: selectedPayment,
-        coupon_code: appliedCoupon ? coupon : undefined,
-        total_amount: total,
+        service_id:     serviceId,
+        date:           selectedDate,
+        time:           selectedTime,
+        address_id:     addressId,
+        address_text:   addressText,
+        payment_method: selectedPayment,  // already typed as PaymentMethod
+        coupon_code:    appliedCoupon ? coupon : undefined,
       });
+
+      // Fix: `data.id` is the correct field — Booking interface has `id`, not `booking_id`
       const bookingData = {
-        bookingId: data.id ?? data.booking_id ?? 'BK' + Date.now(),
-        service: { name: service.name, image: '', category: service.category ?? '' },
+        bookingId: data.id ?? 'BK' + Date.now(),
+        service: { name: service.name, image: '', category: service.category },
         date: selectedDate,
         time: selectedTime,
         address: selectedAddress?.address ?? newAddress,
@@ -162,10 +183,12 @@ export default function Booking() {
             <h1 className="font-bold text-lg text-white leading-tight">Book Service</h1>
             <p className="text-xs text-white/40 truncate max-w-[180px]">{service.name}</p>
           </div>
-          <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full">
-            <Star size={12} className="fill-amber-400 text-amber-400" />
-            <span className="text-xs font-semibold text-white">{service.rating}</span>
-          </div>
+          {service.rating > 0 && (
+            <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full">
+              <Star size={12} className="fill-amber-400 text-amber-400" />
+              <span className="text-xs font-semibold text-white">{service.rating}</span>
+            </div>
+          )}
         </div>
 
         {/* Step Indicator */}
@@ -178,7 +201,7 @@ export default function Booking() {
             />
             {STEPS.map((label, i) => {
               const s = i + 1;
-              const done = currentStep > s;
+              const done   = currentStep > s;
               const active = currentStep === s;
               return (
                 <div key={s} className="relative flex flex-col items-center gap-1.5 z-10">
@@ -199,7 +222,7 @@ export default function Booking() {
         </div>
       </header>
 
-      {/* ── Always-visible Service Pill ── */}
+      {/* ── Service Pill ── */}
       <div className="max-w-2xl mx-auto px-4 pt-5">
         <div className="flex items-center gap-4 bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
           <div className="w-14 h-14 rounded-xl bg-[#111827] flex-shrink-0 flex items-center justify-center text-white font-bold text-lg">
@@ -212,7 +235,7 @@ export default function Booking() {
                 <Timer size={11} /> {service.duration}
               </span>
               <span className="text-xs font-bold text-[#e5849c]">₹{service.discountedPrice}</span>
-              <span className="text-xs text-gray-400 line-through">₹{service.originalPrice}</span>
+              {savings > 0 && <span className="text-xs text-gray-400 line-through">₹{service.originalPrice}</span>}
             </div>
           </div>
           {savings > 0 && (
@@ -225,12 +248,9 @@ export default function Booking() {
 
       <main className="max-w-2xl mx-auto px-4 pt-6 pb-32 space-y-5">
 
-        {/* ════════════════════════════════
-            STEP 1 — Date & Time
-        ════════════════════════════════ */}
+        {/* ── STEP 1 — Date & Time ── */}
         {currentStep === 1 && (
           <>
-            {/* Date Picker */}
             <section className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-5 pt-5 pb-3 flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-[#fff5f7] flex items-center justify-center">
@@ -263,7 +283,6 @@ export default function Booking() {
               </div>
             </section>
 
-            {/* Time Picker */}
             <section className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-5 pt-5 pb-3 flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-[#fff5f7] flex items-center justify-center">
@@ -304,7 +323,6 @@ export default function Booking() {
               </div>
             </section>
 
-            {/* Trust Badges */}
             <div className="flex gap-3">
               {[
                 { icon: '⚡', text: 'Instant Confirmation' },
@@ -320,9 +338,7 @@ export default function Booking() {
           </>
         )}
 
-        {/* ════════════════════════════════
-            STEP 2 — Address
-        ════════════════════════════════ */}
+        {/* ── STEP 2 — Address ── */}
         {currentStep === 2 && (
           <>
             <section className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
@@ -346,8 +362,9 @@ export default function Booking() {
                         : 'border-gray-100 bg-gray-50 hover:border-[#e5849c]/30'
                     }`}
                   >
+                    {/* Fix: guard selectedAddress before calling .id */}
                     <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${
-                      selectedAddress.id === addr.id ? 'bg-[#fff5f7]' : 'bg-white'
+                      selectedAddress?.id === addr.id ? 'bg-[#fff5f7]' : 'bg-white'
                     }`}>
                       {addr.icon}
                     </div>
@@ -389,7 +406,16 @@ export default function Booking() {
                 <button
                   className="mt-3 text-sm font-semibold text-[#e5849c] flex items-center gap-1"
                   onClick={() => {
-                    setSelectedAddress({ id: 'custom', client_id: '', label: 'Other', address: newAddress, icon: '📍', is_default: false });
+                    // Build a proper APIAddress-shaped object for use as selectedAddress
+                    const custom: APIAddress = {
+                      id: 'custom',
+                      client_id: '',
+                      label: 'Other',
+                      address: newAddress,
+                      icon: '📍',
+                      is_default: false,
+                    };
+                    setSelectedAddress(custom);
                     setNewAddress('');
                   }}
                 >
@@ -398,27 +424,19 @@ export default function Booking() {
               )}
             </section>
 
-            {/* Appointment reminder */}
             <div className="bg-[#fff5f7] rounded-2xl p-4 border border-[#f9d0db]">
               <p className="text-xs text-gray-500 mb-1">Your appointment</p>
               <p className="text-sm font-bold text-gray-800">{selectedDate} · {selectedTime}</p>
-              <p className="text-xs text-[#e5849c] font-medium mt-1">{service.name}</p>            </div>
+              <p className="text-xs text-[#e5849c] font-medium mt-1">{service.name}</p>
+            </div>
           </>
         )}
 
-        {/* ════════════════════════════════
-            STEP 3 — Summary
-        ════════════════════════════════ */}
+        {/* ── STEP 3 — Summary ── */}
         {currentStep === 3 && (
           <>
-            {/* Hero Booking Card */}
-            <section
-              className="relative bg-[#111827] rounded-3xl overflow-hidden text-white p-5"
-            >
-              <div
-                className="absolute inset-0 opacity-10"
-                style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, white 0%, transparent 60%)' }}
-              />
+            <section className="relative bg-[#111827] rounded-3xl overflow-hidden text-white p-5">
+              <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_80%_20%,white_0%,transparent_60%)]" />
               <div className="relative flex gap-4">
                 <div className="w-20 h-20 rounded-2xl bg-white/20 ring-2 ring-white/30 flex items-center justify-center text-3xl font-bold text-white flex-shrink-0">
                   {service.name.charAt(0)}
@@ -440,13 +458,17 @@ export default function Booking() {
                   </div>
                 </div>
               </div>
-              <div className="relative mt-3 pt-3 border-t border-white/20 flex items-center gap-2">
-                <MapPin size={13} className="text-[#e5849c] flex-shrink-0" />
-                <p className="text-xs text-white/70 font-medium">{selectedAddress?.address ?? newAddress}</p>
-              </div>
+              {/* Fix: guard selectedAddress with ?. */}
+              {(selectedAddress?.address || newAddress) && (
+                <div className="relative mt-3 pt-3 border-t border-white/20 flex items-center gap-2">
+                  <MapPin size={13} className="text-[#e5849c] flex-shrink-0" />
+                  <p className="text-xs text-white/70 font-medium">
+                    {selectedAddress?.address ?? newAddress}
+                  </p>
+                </div>
+              )}
             </section>
 
-            {/* Coupon */}
             <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
@@ -462,7 +484,7 @@ export default function Booking() {
               {!appliedCoupon ? (
                 <div className="flex gap-3">
                   <Input
-                    placeholder="e.g. WELCOME20"
+                    placeholder="e.g. WELCOME200"
                     value={coupon}
                     onChange={(e) => { setCoupon(e.target.value); setCouponError(false); }}
                     className={`flex-1 bg-gray-50 rounded-2xl py-5 text-sm border ${
@@ -496,7 +518,6 @@ export default function Booking() {
               )}
             </section>
 
-            {/* Payment */}
             <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center">
@@ -508,7 +529,7 @@ export default function Booking() {
                 {paymentOptions.map((opt) => (
                   <button
                     key={opt.id}
-                    onClick={() => setSelectedPayment(opt.id)}
+                    onClick={() => setSelectedPayment(opt.id as PaymentMethod)}
                     className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
                       selectedPayment === opt.id
                         ? 'border-[#e5849c] bg-[#fff5f7]'
@@ -525,7 +546,6 @@ export default function Booking() {
               </div>
             </section>
 
-            {/* Bill Summary */}
             <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
