@@ -29,3 +29,4 @@ class RegisterResponse(BaseModel):
     uid: str
     role: str
     message: str
+    is_approved: Optional[bool] = None

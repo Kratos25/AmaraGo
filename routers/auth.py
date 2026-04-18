@@ -90,22 +90,31 @@ async def register_provider(body: RegisterProviderRequest):
     user_ref = db.collection("users").document(uid)
     provider_ref = db.collection("provider_profiles").document(uid)
 
-    existing_user = user_ref.get()
-    if existing_user.exists:
-        data = existing_user.to_dict()
-        return RegisterResponse(uid=uid, role=data.get("role", "service_provider"), message="Already registered.")
+    # Check the provider profile (not the user doc) to detect duplicates.
+    # A user may already exist as a client and be upgrading to a provider.
+    existing_provider = provider_ref.get()
+    if existing_provider.exists:
+        prov_data = existing_provider.to_dict()
+        is_approved = prov_data.get("is_approved", False)
+        return RegisterResponse(uid=uid, role="pending_sp", message="Already registered.", is_approved=is_approved)
 
     now = datetime.now(timezone.utc).isoformat()
 
-    user_ref.set({
-        "uid": uid,
-        "name": body.name,
-        "email": body.email,
-        "phone": body.phone,
-        "role": "service_provider",
-        "profile_image": None,
-        "created_at": now,
-    })
+    existing_user = user_ref.get()
+    if existing_user.exists:
+        # Upgrade existing client (or any role) to pending_sp
+        user_ref.update({"role": "pending_sp"})
+    else:
+        # Brand-new user — create their user document
+        user_ref.set({
+            "uid": uid,
+            "name": body.name,
+            "email": body.email,
+            "phone": body.phone,
+            "role": "pending_sp",
+            "profile_image": None,
+            "created_at": now,
+        })
 
     provider_ref.set({
         "uid": uid,
@@ -123,7 +132,7 @@ async def register_provider(body: RegisterProviderRequest):
         "created_at": now,
     })
 
-    return RegisterResponse(uid=uid, role="service_provider", message="Provider registered. Awaiting admin approval.")
+    return RegisterResponse(uid=uid, role="pending_sp", message="Provider registered. Awaiting admin approval.", is_approved=False)
 
 
 # ── Me (get current user) ─────────────────────────────────────────────────────

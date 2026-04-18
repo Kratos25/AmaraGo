@@ -68,7 +68,6 @@ async def get_points_history(current_user: CurrentUser = Depends(get_current_use
     docs = (
         db.collection("loyalty_transactions")
         .where("client_id", "==", current_user.uid)
-        .order_by("created_at", direction="DESCENDING")
         .limit(50)
         .stream()
     )
@@ -83,4 +82,5 @@ async def get_points_history(current_user: CurrentUser = Depends(get_current_use
             created_at=d.get("created_at"),
             description=d.get("description", "Booking reward"),
         ))
+    results.sort(key=lambda r: r.created_at or "", reverse=True)
     return results

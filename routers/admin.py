@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Any, List
+from typing import Any, List, Optional
 
 from firebase_config import get_db
 from dependencies.auth import CurrentUser, require_role
@@ -156,6 +156,102 @@ async def list_clients(
     return results
 
 
+# ── Enriched client stats (with booking aggregates) ────────────────────────────
+
+class ClientStats(BaseModel):
+    uid: str
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    profile_image: Optional[str] = None
+    created_at: Optional[str] = None
+    total_bookings: int = 0
+    completed_bookings: int = 0
+    cancelled_bookings: int = 0
+    total_spend: float = 0.0
+    avg_booking_value: float = 0.0
+    favorite_service: Optional[str] = None
+    last_booking_date: Optional[str] = None
+    is_vip: bool = False
+
+
+ClientStats.model_rebuild()
+
+
+@router.get("/clients-stats", response_model=List[ClientStats])
+async def list_clients_stats(
+    _admin: CurrentUser = Depends(require_role("admin")),
+):
+    """Returns all clients enriched with real booking aggregates in ONE call."""
+    db = get_db()
+
+    # 1. Load all clients
+    client_map: dict[str, dict] = {}
+    for doc in db.collection("users").where("role", "==", "client").stream():
+        client_map[doc.id] = doc.to_dict()
+
+    # 2. Aggregate bookings per client in a single Firestore scan
+    totals: dict[str, dict] = {}
+    for booking_doc in db.collection("bookings").stream():
+        d = booking_doc.to_dict()
+        cid = d.get("client_id", "")
+        if cid not in client_map:
+            continue
+        if cid not in totals:
+            totals[cid] = {
+                "total": 0, "completed": 0, "cancelled": 0,
+                "spend": 0.0, "services": {}, "last_date": "",
+            }
+        t = totals[cid]
+        t["total"] += 1
+        status = d.get("status", "")
+        if status == "completed":
+            t["completed"] += 1
+            t["spend"] += float(d.get("total_price", 0))
+        if status == "cancelled":
+            t["cancelled"] += 1
+        # Track favourite service
+        svc = d.get("service_name") or ""
+        if svc:
+            t["services"][svc] = t["services"].get(svc, 0) + 1
+        # Latest booking date
+        bdate = d.get("date", "")
+        if bdate and bdate > t["last_date"]:
+            t["last_date"] = bdate
+
+    # 3. Build response
+    VIP_THRESHOLD = 20000.0
+    results: list[ClientStats] = []
+    for uid, c in client_map.items():
+        t = totals.get(uid, {})
+        total = t.get("total", 0)
+        completed = t.get("completed", 0)
+        spend = t.get("spend", 0.0)
+        avg = round(spend / completed, 2) if completed else 0.0
+        services = t.get("services", {})
+        fav = max(services, key=services.get, default=None) if services else None
+        results.append(ClientStats(
+            uid=uid,
+            name=c.get("name", ""),
+            email=c.get("email"),
+            phone=c.get("phone"),
+            profile_image=c.get("profile_image"),
+            created_at=c.get("created_at").isoformat() if hasattr(c.get("created_at"), "isoformat") else (str(c.get("created_at")) if c.get("created_at") else None),
+            total_bookings=total,
+            completed_bookings=completed,
+            cancelled_bookings=t.get("cancelled", 0),
+            total_spend=spend,
+            avg_booking_value=avg,
+            favorite_service=fav,
+            last_booking_date=t.get("last_date") or None,
+            is_vip=spend >= VIP_THRESHOLD,
+        ))
+
+    # Sort by total_spend desc
+    results.sort(key=lambda x: x.total_spend, reverse=True)
+    return results
+
+
 # ── Single client profile ─────────────────────────────────────────────────────
 
 @router.get("/clients/{client_uid}", response_model=UserResponse)
@@ -222,10 +318,11 @@ async def get_client_bookings(
     docs = (
         db.collection("bookings")
         .where("client_id", "==", client_uid)
-        .order_by("created_at", direction="DESCENDING")
         .stream()
     )
-    return [_booking_dict_to_response(doc) for doc in docs]
+    results = [_booking_dict_to_response(doc) for doc in docs]
+    results.sort(key=lambda b: b.created_at or "", reverse=True)
+    return results
 
 
 # ── Notifications ─────────────────────────────────────────────────────────────

@@ -27,13 +27,25 @@ class ProviderProfileBase(BaseModel):
     portfolio: list[PortfolioItem] = Field(default_factory=list)
 
 
+class ProviderDocuments(BaseModel):
+    aadhar_url: Optional[str] = None
+    pan_url: Optional[str] = None
+    certification_docs: list[str] = Field(default_factory=list)
+
+
 class UpdateProviderProfileRequest(BaseModel):
+    # user-collection fields
+    name: Optional[str] = Field(None, max_length=200)
+    phone: Optional[str] = Field(None, max_length=20)
+    profile_image: Optional[str] = None
+    # provider_profiles-collection fields
     bio: Optional[str] = Field(None, max_length=1000)
     experience_years: Optional[int] = Field(None, ge=0, le=50)
     services_offered: Optional[list[str]] = None
     location: Optional[str] = Field(None, max_length=300)
     certifications: Optional[list[Certification]] = None
     portfolio: Optional[list[PortfolioItem]] = None
+    documents: Optional[ProviderDocuments] = None
 
 
 class ProviderProfileResponse(ProviderProfileBase):
@@ -48,6 +60,7 @@ class ProviderProfileResponse(ProviderProfileBase):
     is_approved: bool = False
     commission_rate: float = 15.0
     created_at: Optional[datetime] = None
+    documents: Optional[ProviderDocuments] = None
 
 
 # ── Online toggle ─────────────────────────────────────────────────────────────
