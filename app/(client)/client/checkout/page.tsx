@@ -37,9 +37,8 @@ const STEPS = ["Slot", "Address", "Payment", "Review"];
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function getMinDate() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0];
+  // Allow today
+  return new Date().toISOString().split("T")[0];
 }
 
 function StepDots({ current, total }: { current: number; total: number }) {
@@ -75,6 +74,7 @@ export default function CheckoutPage() {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [bookingRef, setBookingRef] = useState<string | null>(null);
 
   // Step 1 — slot
   const [selectedDate, setSelectedDate] = useState("");
@@ -84,6 +84,8 @@ export default function CheckoutPage() {
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [newAddressText, setNewAddressText] = useState("");
+  const [newAddressLabel, setNewAddressLabel] = useState("");
+  const [saveNewAddress, setSaveNewAddress] = useState(true);
   const [phone, setPhone] = useState("");
   const [addrsLoading, setAddrsLoading] = useState(true);
 
@@ -149,34 +151,54 @@ export default function CheckoutPage() {
     if (!user) { router.push("/login?redirect=/client/checkout"); return; }
     if (!selectedDate || !selectedTime) { toast({ title: "Select a date and time", variant: "destructive" }); return; }
 
-    const addressId = selectedAddressId ?? undefined;
-    const addressText = !selectedAddressId ? newAddressText : undefined;
-    if (!addressId && !addressText?.trim()) {
+    const hasAddress = selectedAddressId || newAddressText.trim();
+    if (!hasAddress) {
       toast({ title: "Add a delivery address", variant: "destructive" });
       return;
     }
 
     setSubmitting(true);
     try {
-      const token = await user.getIdToken();
+      await user.getIdToken(); // refreshes token in cookie
 
-      // Create one booking per cart item
-      await Promise.all(
-        items.map((item) =>
-          bookingsAPI.create({
-            service_id: item.service_id ?? undefined,
-            package_id: item.package_id ?? undefined,
-            date: selectedDate,
-            time: selectedTime,
-            address_id: addressId,
-            address_text: addressText,
-            payment_method: paymentMethod as any,
-            coupon_code: appliedCoupon || undefined,
-            notes: undefined,
-          })
-        )
-      );
+      // If user typed a new address and opted to save it, persist it first
+      let finalAddressId = selectedAddressId ?? undefined;
+      let finalAddressText: string | undefined = !selectedAddressId ? newAddressText : undefined;
 
+      if (!selectedAddressId && newAddressText.trim() && saveNewAddress) {
+        try {
+          const label = newAddressLabel.trim() || 'Address';
+          const created = await addressesAPI.create({
+            label,
+            address: newAddressText.trim(),
+            is_default: savedAddresses.length === 0,
+          });
+          finalAddressId = created.data.id;
+          finalAddressText = undefined;
+          setSavedAddresses((prev) => [...prev, created.data]);
+          setSelectedAddressId(created.data.id);
+        } catch {
+          // If save fails, still proceed with address_text
+        }
+      }
+
+      const { data } = await bookingsAPI.createMulti({
+        items: items.map((item) => ({
+          service_id: item.service_id ?? undefined,
+          package_id: item.package_id ?? undefined,
+          name: item.name,
+          unit_price: item.price,
+          quantity: item.quantity,
+        })),
+        date: selectedDate,
+        time: selectedTime,
+        address_id: finalAddressId,
+        address_text: finalAddressText,
+        payment_method: paymentMethod as any,
+        coupon_code: appliedCoupon || undefined,
+      });
+
+      setBookingRef(data.booking_ref ?? null);
       await clearCart();
       setDone(true);
     } catch (err: any) {
@@ -198,8 +220,17 @@ export default function CheckoutPage() {
           <CheckCircle size={48} className="text-green-500" />
         </div>
         <h2 className="text-2xl font-extrabold text-gray-900 mb-2">Booking Confirmed! 🎉</h2>
+
+        {bookingRef && (
+          <div className="my-4 px-6 py-4 bg-[#fdf0f3] border border-[#e5849c]/30 rounded-2xl w-full max-w-xs">
+            <p className="text-xs text-gray-500 mb-1">Your Booking ID</p>
+            <p className="text-3xl font-black tracking-wide text-[#e5849c]">{bookingRef}</p>
+            <p className="text-[11px] text-gray-400 mt-1">Save this for reference</p>
+          </div>
+        )}
+
         <p className="text-gray-500 text-sm mb-2">
-          {items.length > 0 ? `${items.length} services booked` : "Your services have been booked"} for{" "}
+          Scheduled for{" "}
           <span className="font-semibold text-gray-700">{selectedDate}</span> at{" "}
           <span className="font-semibold text-gray-700">{selectedTime}</span>.
         </p>
@@ -223,7 +254,23 @@ export default function CheckoutPage() {
     );
   }
 
-  // ── Step renderers ──────────────────────────────────────────────────────────
+  // ── Import addressesAPI — already imported at top ──────────────────────────
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // Filter out past time slots when selecting today (with 1-hour buffer)
+  const availableTimeSlots = selectedDate === today
+    ? TIME_SLOTS.filter((slot) => {
+        const [hm, period] = slot.split(' ');
+        const [h, m] = hm.split(':').map(Number);
+        const isPM = period === 'PM';
+        const slotHour = isPM && h !== 12 ? h + 12 : (!isPM && h === 12 ? 0 : h);
+        const now = new Date();
+        return slotHour > now.getHours() + 1 ||
+          (slotHour === now.getHours() + 1 && m > now.getMinutes());
+      })
+    : TIME_SLOTS;
+
   const renderStep1 = () => (
     <div className="space-y-6">
       <div>
@@ -235,7 +282,7 @@ export default function CheckoutPage() {
           type="date"
           min={getMinDate()}
           value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
+          onChange={(e) => { setSelectedDate(e.target.value); setSelectedTime(""); }}
           className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40"
         />
       </div>
@@ -245,21 +292,25 @@ export default function CheckoutPage() {
           <Clock size={15} className="inline mr-1.5 text-[#e5849c]" />
           Select Time
         </label>
-        <div className="grid grid-cols-3 gap-2">
-          {TIME_SLOTS.map((slot) => (
-            <button
-              key={slot}
-              onClick={() => setSelectedTime(slot)}
-              className={`py-2.5 rounded-xl text-xs font-semibold border transition-all ${
-                selectedTime === slot
-                  ? "bg-[#e5849c] border-[#e5849c] text-white"
-                  : "border-gray-200 text-gray-700 hover:border-[#e5849c]/40 hover:bg-[#fdf0f3]"
-              }`}
-            >
-              {slot}
-            </button>
-          ))}
-        </div>
+        {availableTimeSlots.length === 0 ? (
+          <p className="text-sm text-red-500 py-2">No slots available today — please pick another date.</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {availableTimeSlots.map((slot) => (
+              <button
+                key={slot}
+                onClick={() => setSelectedTime(slot)}
+                className={`py-2.5 rounded-xl text-xs font-semibold border transition-all ${
+                  selectedTime === slot
+                    ? "bg-[#e5849c] border-[#e5849c] text-white"
+                    : "border-gray-200 text-gray-700 hover:border-[#e5849c]/40 hover:bg-[#fdf0f3]"
+                }`}
+              >
+                {slot}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -313,7 +364,7 @@ export default function CheckoutPage() {
               </button>
             ))}
 
-            {/* Type a new address */}
+            {/* Add a new address */}
             <div className={`p-4 rounded-2xl border transition-all ${
               !selectedAddressId ? "border-[#e5849c] bg-[#fdf0f3]" : "border-gray-200"
             }`}>
@@ -321,16 +372,35 @@ export default function CheckoutPage() {
                 onClick={() => setSelectedAddressId(null)}
                 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2"
               >
-                <Plus size={14} className="text-[#e5849c]" /> Use a different address
+                <Plus size={14} className="text-[#e5849c]" />
+                {savedAddresses.length > 0 ? "Use a different address" : "Add address"}
               </button>
               {!selectedAddressId && (
-                <textarea
-                  placeholder="Enter full address..."
-                  value={newAddressText}
-                  onChange={(e) => setNewAddressText(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 resize-none"
-                />
+                <div className="space-y-2">
+                  <input
+                    placeholder="Label (e.g. Home, Office, Hotel)"
+                    value={newAddressLabel}
+                    onChange={(e) => setNewAddressLabel(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 bg-white"
+                  />
+                  <textarea
+                    placeholder="Full address…"
+                    value={newAddressText}
+                    onChange={(e) => setNewAddressText(e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 resize-none bg-white"
+                  />
+                  {/* Save to profile toggle */}
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <div
+                      onClick={() => setSaveNewAddress((v) => !v)}
+                      className={`w-9 h-5 rounded-full transition-colors relative ${saveNewAddress ? 'bg-[#e5849c]' : 'bg-gray-200'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${saveNewAddress ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </div>
+                    <span className="text-xs text-gray-600">Save to my addresses</span>
+                  </label>
+                </div>
               )}
             </div>
           </div>

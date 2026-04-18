@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Plus, Minus, ArrowRight, Tag, Loader2, PackageOpen } from "lucide-react";
 import { useCart } from "@/config/context/CartContext";
+import { useAuth } from "@/config/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { couponsAPI, servicesAPI } from "@/lib/api";
@@ -43,6 +44,8 @@ function getServiceEmoji(name: string): string {
 export default function CartPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   // Fix: include addItem in destructure so recommended section can use it
   const { items, subtotal, itemCount, loading, addItem, updateItem, removeItem } = useCart();
 
@@ -91,6 +94,10 @@ export default function CartPage() {
   };
 
   const handleCheckout = () => {
+    if (!user) {
+      setShowLoginPrompt(true);
+      return;
+    }
     const params = new URLSearchParams({
       coupon: appliedCoupon ?? "",
       discount: discount.toString(),
@@ -288,6 +295,44 @@ export default function CartPage() {
           <ArrowRight size={18} />
         </Button>
       </div>
+
+      {/* ── Login prompt modal ── */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="bg-[#111827] px-6 py-6 text-center">
+              <div className="text-4xl mb-3">🔐</div>
+              <h2 className="text-white font-bold text-lg">Login Required</h2>
+              <p className="text-white/50 text-sm mt-1">Sign in to proceed with your booking</p>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-3">
+              <p className="text-sm text-gray-500 text-center">
+                Your cart is saved. Log in and we&apos;ll take you straight to checkout.
+              </p>
+
+              <Button
+                onClick={() => {
+                  setShowLoginPrompt(false);
+                  router.push('/login?redirect=/client/cart');
+                }}
+                className="w-full bg-[#e5849c] hover:bg-[#d4738b] text-white font-semibold py-5 rounded-2xl text-sm"
+              >
+                Log In
+              </Button>
+
+              <button
+                onClick={() => setShowLoginPrompt(false)}
+                className="w-full py-3 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Home, ClipboardList, Wallet, User, BookOpen,
-  Calendar, Settings, LogOut, Star, Bell, Menu, X,
+  Calendar, Settings, LogOut, Bell, Menu, X,
   ArrowLeftRight,
 } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
@@ -12,7 +12,15 @@ import Image from 'next/image';
 import Logo from '@/public/Amara_Logo.png';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { providersAPI } from '@/lib/api';
+import { providersAPI, type ProviderProfile, type ProviderNotification } from '@/lib/api';
+import { useAuth } from '@/config/context/AuthContext';
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 // Primary   #C84B31   Hover #B04028
@@ -64,6 +72,76 @@ function OnlineSwitch({ checked, onCheckedChange }: {
   );
 }
 
+// ─── Notification Panel ───────────────────────────────────────────────────────
+
+function ProviderNotifPanel({
+  notifications,
+  loading,
+  onClose,
+  onNavigate,
+}: {
+  notifications: ProviderNotification[];
+  loading: boolean;
+  onClose: () => void;
+  onNavigate: (href: string) => void;
+}) {
+  const ICON_CFG = {
+    new_booking:        { emoji: '📋', bg: 'bg-[#FFF0EC]', border: 'border-[#FDDDD5]' },
+    new_rating:         { emoji: '⭐', bg: 'bg-amber-50',   border: 'border-amber-100' },
+    booking_cancelled:  { emoji: '❌', bg: 'bg-red-50',     border: 'border-red-100'   },
+  };
+
+  return (
+    <div className="absolute right-0 top-12 w-[320px] bg-white border border-[#EBEBEB] rounded-2xl shadow-xl z-50 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#EBEBEB]">
+        <p className="font-bold text-[14px] text-[#1A1A1A]">Notifications</p>
+        <button onClick={onClose} className="w-6 h-6 rounded-full bg-[#F5F4F2] flex items-center justify-center text-[#6B7280] hover:bg-[#EBEBEB]">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="max-h-[380px] overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-5 h-5 border-2 border-[#C84B31] border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center mb-3 text-xl">
+              🔔
+            </div>
+            <p className="text-[13px] font-semibold text-[#1A1A1A]">No notifications</p>
+            <p className="text-[11px] text-[#9CA3AF] mt-1">You're all caught up!</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-[#EBEBEB]">
+            {notifications.map((n) => {
+              const cfg = ICON_CFG[n.type] ?? ICON_CFG.new_booking;
+              const href = n.type === 'new_booking' || n.type === 'booking_cancelled'
+                ? '/provider/my-jobs'
+                : '/provider/my-jobs';
+              return (
+                <button
+                  key={n.id}
+                  onClick={() => onNavigate(href)}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-[#FFF0EC]/50 transition-colors text-left"
+                >
+                  <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 mt-0.5 text-sm', cfg.bg, cfg.border)}>
+                    {cfg.emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-semibold text-[#1A1A1A]">{n.title}</p>
+                    <p className="text-[11px] text-[#6B7280] mt-0.5 leading-snug line-clamp-2">{n.message}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Provider Layout ──────────────────────────────────────────────────────────
 
 interface ProviderLayoutProps {
@@ -83,20 +161,105 @@ export default function ProviderLayout({
 }: ProviderLayoutProps) {
   const router   = useRouter();
   const pathname = usePathname();
-  const [isOnline, setIsOnline]           = useState(false);
+  const { user } = useAuth();
+  const [profile, setProfile]               = useState<ProviderProfile | null>(null);
+  const [isOnline, setIsOnline]             = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Load initial online status from backend
+  // Notifications
+  const [bellOpen, setBellOpen]             = useState(false);
+  const [notifLoading, setNotifLoading]     = useState(false);
+  const [notifications, setNotifications]   = useState<ProviderNotification[]>([]);
+  const [unreadCount, setUnreadCount]       = useState(0);
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  const getSeenIds = (): string[] => {
+    try { return JSON.parse(localStorage.getItem('provider_seen_notifs') ?? '[]'); }
+    catch { return []; }
+  };
+  const markAllSeen = (notifs: ProviderNotification[]) => {
+    try { localStorage.setItem('provider_seen_notifs', JSON.stringify(notifs.map((n) => n.id))); }
+    catch {}
+  };
+  const countUnread = (notifs: ProviderNotification[]) => {
+    const seen = new Set(getSeenIds());
+    return notifs.filter((n) => !seen.has(n.id)).length;
+  };
+
   useEffect(() => {
-    providersAPI.getMyProfile()
-      .then(({ data }) => setIsOnline(data.is_online))
+    providersAPI.getMyNotifications()
+      .then(({ data }) => { setNotifications(data); setUnreadCount(countUnread(data)); })
       .catch(() => {});
   }, []);
+
+  const openBell = () => {
+    setBellOpen((prev) => {
+      if (!prev) {
+        setNotifLoading(true);
+        providersAPI.getMyNotifications()
+          .then(({ data }) => {
+            setNotifications(data);
+            markAllSeen(data);
+            setUnreadCount(0);
+          })
+          .catch(() => {})
+          .finally(() => setNotifLoading(false));
+      }
+      return !prev;
+    });
+  };
+
+  // Close bell on outside click
+  useEffect(() => {
+    if (!bellOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [bellOpen]);
+
+  // Load initial profile + online status from backend
+  useEffect(() => {
+    providersAPI.getMyProfile()
+      .then(({ data }) => { setProfile(data); setIsOnline(data.is_online); })
+      .catch(() => {});
+  }, []);
+
+  // Derived display values — prefer backend profile, fall back to Firebase user
+  const photoURL    = user?.photoURL   ?? profile?.profile_image ?? null;
+  const displayName = profile?.name    ?? user?.displayName      ?? 'Provider';
+  const displayEmail= profile?.email   ?? user?.email            ?? '';
+  const roleLabel   = profile?.services_offered?.length
+    ? profile.services_offered.slice(0, 2).join(' & ')
+    : 'Service Professional';
+  const initials = displayName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+
+  // ── Profile avatar (photo or gradient initials) ────────────────────────────
+  const Avatar = ({ size = 'sm' }: { size?: 'sm' | 'md' }) => {
+    const dim = size === 'md' ? 'w-10 h-10' : 'w-9 h-9';
+    if (photoURL) {
+      return (
+        <div className={cn(dim, 'rounded-full overflow-hidden border border-[#EBEBEB] shrink-0 select-none')}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photoURL} alt={displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        </div>
+      );
+    }
+    return (
+      <div className={cn(dim, 'rounded-full shrink-0 select-none flex items-center justify-center text-white font-bold text-xs')}
+        style={{ background: 'linear-gradient(135deg, #C84B31, #F2924A)' }}>
+        {initials}
+      </div>
+    );
+  };
 
   const handleOnlineToggle = async (value: boolean) => {
     setIsOnline(value); // optimistic
     try {
-      await providersAPI.toggleOnline(value);
+      const { data } = await providersAPI.toggleOnline(value);
+      setProfile(data);
+      setIsOnline(data.is_online);
     } catch {
       setIsOnline(!value); // revert on error
     }
@@ -200,12 +363,10 @@ export default function ProviderLayout({
         {/* Profile + online toggle */}
         <div className="px-4 py-4 border-b border-[#EBEBEB]">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-white border border-[#EBEBEB] flex items-center justify-center text-base shrink-0 select-none">
-              👩‍🦰
-            </div>
+            <Avatar size="sm" />
             <div className="min-w-0">
-              <p className="font-semibold text-sm text-[#1A1A1A] truncate">Meera Patel</p>
-              <p className="text-[11px] text-[#9CA3AF]">Beauty Professional</p>
+              <p className="font-semibold text-sm text-[#1A1A1A] truncate">{displayName}</p>
+              <p className="text-[11px] text-[#9CA3AF] truncate">{displayEmail || roleLabel}</p>
             </div>
           </div>
           <div
@@ -265,29 +426,45 @@ export default function ProviderLayout({
             <ClientPageButton size="sm" />
 
             {showBell && (
-              <button className="relative w-9 h-9 rounded-full bg-[#F5F4F2] flex items-center justify-center text-[#6B7280] hover:bg-[#EBEBEB] transition-colors">
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-white" />
-              </button>
+              <div className="relative" ref={bellRef}>
+                <button
+                  onClick={openBell}
+                  className="relative w-9 h-9 rounded-full bg-[#F5F4F2] flex items-center justify-center text-[#6B7280] hover:bg-[#EBEBEB] transition-colors"
+                >
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-[#C84B31] rounded-full border border-white flex items-center justify-center text-[9px] font-bold text-white px-0.5">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+                {bellOpen && (
+                  <ProviderNotifPanel
+                    notifications={notifications}
+                    loading={notifLoading}
+                    onClose={() => setBellOpen(false)}
+                    onNavigate={(href) => { router.push(href); setBellOpen(false); }}
+                  />
+                )}
+              </div>
             )}
             <div className="h-6 w-px bg-[#EBEBEB]" />
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-white border border-[#EBEBEB] flex items-center justify-center text-base select-none">
-                👩‍🦰
+              <Avatar size="sm" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[#1A1A1A] truncate max-w-[140px]">{displayName}</p>
+                {displayEmail && <p className="text-[11px] text-[#9CA3AF] truncate max-w-[140px]">{displayEmail}</p>}
               </div>
-              <span className="text-sm font-semibold text-[#1A1A1A]">Meera Patel</span>
             </div>
           </div>
         </header>
 
         {/* ── Mobile top bar ── */}
         <header className="md:hidden sticky top-0 z-40 bg-white border-b border-[#EBEBEB] px-4 py-3.5 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-white border border-[#EBEBEB] flex items-center justify-center text-lg select-none shrink-0">
-            👩‍🦰
-          </div>
+          <Avatar size="sm" />
           <div className="flex-1 min-w-0">
-            <p className="text-[#9CA3AF] text-[11px]">Good afternoon</p>
-            <h1 className="font-bold text-[15px] text-[#1A1A1A] tracking-tight truncate">Meera Patel</h1>
+            <p className="text-[#9CA3AF] text-[11px]">{getGreeting()}</p>
+            <h1 className="font-bold text-[15px] text-[#1A1A1A] tracking-tight truncate">{displayName}</h1>
           </div>
           <div className="flex items-center gap-2">
             {/* Go to Client Page (mobile icon-only) */}
@@ -300,10 +477,29 @@ export default function ProviderLayout({
             </button>
 
             {showBell && (
-              <button className="relative w-9 h-9 rounded-full bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280]">
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-white" />
-              </button>
+              <div className="relative" ref={bellRef}>
+                <button
+                  onClick={openBell}
+                  className="relative w-9 h-9 rounded-full bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280]"
+                >
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-[#C84B31] rounded-full border border-white flex items-center justify-center text-[9px] font-bold text-white px-0.5">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+                {bellOpen && (
+                  <div className="fixed left-4 right-4 top-16 z-50">
+                    <ProviderNotifPanel
+                      notifications={notifications}
+                      loading={notifLoading}
+                      onClose={() => setBellOpen(false)}
+                      onNavigate={(href) => { router.push(href); setBellOpen(false); }}
+                    />
+                  </div>
+                )}
+              </div>
             )}
             <button
               onClick={() => setMobileMenuOpen(true)}
@@ -361,7 +557,7 @@ export default function ProviderLayout({
                   <Image src={Logo} alt="Amara Logo" className="w-8 h-8 rounded-lg" />
                   {/* <Star className="w-4 h-4 text-white" /> */}
                 </div>
-                <span className="font-bold text-[15px] text-[#1A1A1A] tracking-tight">ServicePro</span>
+                <span className="font-bold text-[15px] text-[#1A1A1A] tracking-tight">AmaraGo</span>
               </div>
               <button
                 onClick={() => setMobileMenuOpen(false)}
@@ -374,12 +570,11 @@ export default function ProviderLayout({
             {/* Profile + online */}
             <div className="px-4 py-4 border-b border-[#EBEBEB]">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-white border border-[#EBEBEB] flex items-center justify-center text-lg select-none shrink-0">
-                  👩‍🦰
-                </div>
+                <Avatar size="md" />
                 <div className="min-w-0">
-                  <p className="font-semibold text-sm text-[#1A1A1A] truncate">Meera Patel</p>
-                  <p className="text-[11px] text-[#9CA3AF]">Beauty Professional</p>
+                  <p className="font-semibold text-sm text-[#1A1A1A] truncate">{displayName}</p>
+                  <p className="text-[11px] text-[#9CA3AF] truncate">{roleLabel}</p>
+                  {displayEmail && <p className="text-[10px] text-[#9CA3AF] truncate">{displayEmail}</p>}
                 </div>
               </div>
               <div

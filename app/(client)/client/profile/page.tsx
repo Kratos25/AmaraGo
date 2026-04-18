@@ -61,6 +61,12 @@ export default function Profile() {
     finally { setAddrsLoading(false); }
   };
 
+  // Fetch addresses on mount so the count in the menu is correct
+  useEffect(() => {
+    fetchAddresses();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSaveAddress = async () => {
     if (!newAddrLabel.trim() || !newAddrText.trim()) return;
     try {
@@ -141,7 +147,7 @@ export default function Profile() {
     {
       title: 'Account',
       items: [
-        { icon: <MapPin size={17} />, label: 'Saved Addresses', sub: `${addresses.length} address${addresses.length !== 1 ? 'es' : ''} saved`, action: () => { setShowAddresses(true); fetchAddresses(); } },
+        { icon: <MapPin size={17} />, label: 'Saved Addresses', sub: `${addresses.length} address${addresses.length !== 1 ? 'es' : ''} saved`, action: () => setShowAddresses(true) },
         { icon: <Gift size={17} />,   label: 'Refer & Earn',    sub: 'Get ₹200 per referral', badge: 'NEW' },
         { icon: <Heart size={17} />,  label: 'Wishlist',        sub: '3 saved services' },
       ],

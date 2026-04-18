@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
-import AdminLayout from '../_components/AdminLayout';
+import AdminLayout from '../../_components/AdminLayout';
 import { adminAPI, type UserProfile, type Booking } from '@/lib/api';
 
 // ── Status config ─────────────────────────────────────────────────────────────

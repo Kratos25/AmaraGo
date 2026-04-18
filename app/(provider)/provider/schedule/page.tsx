@@ -1,93 +1,94 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, MapPin, Clock,
-  CheckCircle2, AlertCircle,
+  CheckCircle2, RefreshCw, Calendar, Briefcase,
+  IndianRupee, AlertCircle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/app/lib/utils';
 import ProviderLayout from '../_components/ProviderLayout';
+import { providersAPI, type Booking } from '@/lib/api';
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-// Primary   #C84B31   Hover #B04028
-// Tint bg   #FFF0EC   Tint border #FDDDD5
-// Page bg   #F5F4F2   Surface #FFFFFF
-// Border    #EBEBEB
-// Text-1    #1A1A1A   Text-2 #6B7280   Text-3 #9CA3AF
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface ScheduledJob {
-  id: string;
-  service: string;
-  client: string;
-  clientEmoji: string;
-  location: string;
-  startHour: number;   // 0–23
-  startMin: number;
-  durationMin: number;
-  earnings: number;
-  status: 'confirmed' | 'in_progress' | 'completed';
-  date: string; // 'YYYY-MM-DD'
+function todaySubtitle() {
+  return new Date().toLocaleDateString('en-IN', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
 }
 
-interface AvailabilitySlot {
-  day: string;
-  enabled: boolean;
-  from: string;
-  to: string;
+function fmt(n: number) {
+  return n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-// Build dates relative to "today" = Dec 27 2024 for consistency with app
-const TODAY = new Date(2025, 2, 14); // March 14 2025
-
-function dateStr(offset: number) {
-  const d = new Date(TODAY);
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().split('T')[0];
+/** Parse "10:00 AM", "2:30 PM", "14:30", "09:00" → { h, m } */
+function parseTime(timeStr: string): { h: number; m: number } {
+  if (!timeStr) return { h: 0, m: 0 };
+  const upper = timeStr.toUpperCase().trim();
+  const isPM  = upper.includes('PM');
+  const isAM  = upper.includes('AM');
+  const clean = upper.replace('AM', '').replace('PM', '').trim();
+  const [hStr, mStr] = clean.split(':');
+  let h = parseInt(hStr || '0', 10);
+  const m = parseInt(mStr || '0', 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return { h: 0, m: 0 };
+  if (isPM && h !== 12) h += 12;
+  if (isAM && h === 12) h = 0;
+  return { h, m };
 }
 
-const JOBS: ScheduledJob[] = [
-  {
-    id: 'j1', service: 'Bridal Makeup', client: 'Sneha Reddy', clientEmoji: '👰',
-    location: 'Powai, Mumbai', startHour: 14, startMin: 0, durationMin: 120,
-    earnings: 4999, status: 'in_progress', date: dateStr(0),
-  },
-  {
-    id: 'j2', service: 'Gold Facial', client: 'Ananya S.', clientEmoji: '👩',
-    location: 'Bandra West', startHour: 10, startMin: 0, durationMin: 60,
-    earnings: 1599, status: 'completed', date: dateStr(0),
-  },
-  {
-    id: 'j3', service: 'Hair Spa', client: 'Meghna K.', clientEmoji: '🧖‍♀️',
-    location: 'Worli, Mumbai', startHour: 10, startMin: 0, durationMin: 75,
-    earnings: 999, status: 'confirmed', date: dateStr(1),
-  },
-  {
-    id: 'j4', service: 'Full Body Waxing', client: 'Divya Nair', clientEmoji: '✨',
-    location: 'Dadar, Mumbai', startHour: 12, startMin: 30, durationMin: 60,
-    earnings: 799, status: 'confirmed', date: dateStr(1),
-  },
-  {
-    id: 'j5', service: 'Party Makeup', client: 'Priya M.', clientEmoji: '💄',
-    location: 'Juhu, Mumbai', startHour: 18, startMin: 0, durationMin: 90,
-    earnings: 1999, status: 'confirmed', date: dateStr(2),
-  },
-  {
-    id: 'j6', service: 'Nail Art', client: 'Kavita Shah', clientEmoji: '💅',
-    location: 'Malad West', startHour: 16, startMin: 0, durationMin: 45,
-    earnings: 699, status: 'confirmed', date: dateStr(3),
-  },
-  {
-    id: 'j7', service: 'Hair Styling', client: 'Ritu Sharma', clientEmoji: '👱‍♀️',
-    location: 'Andheri West', startHour: 11, startMin: 0, durationMin: 60,
-    earnings: 899, status: 'confirmed', date: dateStr(5),
-  },
-];
+function fmt12(h: number, m: number) {
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hh   = h % 12 || 12;
+  return `${hh}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function getWeekDates(anchor: Date): Date[] {
+  const monday = new Date(anchor);
+  const day    = monday.getDay();
+  monday.setDate(anchor.getDate() - (day === 0 ? 6 : day - 1));
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
+function toDateStr(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+const DAY_LABELS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ─── Status styles ────────────────────────────────────────────────────────────
+
+const STATUS_STYLE: Record<string, {
+  dot: string; bg: string; border: string; text: string; label: string;
+}> = {
+  pending:   { dot: 'bg-amber-400',   bg: 'bg-amber-50',   border: 'border-amber-100',   text: 'text-amber-700',  label: 'Pending'     },
+  confirmed: { dot: 'bg-[#C84B31]',   bg: 'bg-[#FFF0EC]',  border: 'border-[#FDDDD5]',   text: 'text-[#C84B31]',  label: 'Confirmed'   },
+  active:    { dot: 'bg-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700', label: 'In Progress' },
+  completed: { dot: 'bg-[#9CA3AF]',   bg: 'bg-[#F5F4F2]',  border: 'border-[#EBEBEB]',   text: 'text-[#6B7280]',  label: 'Completed'   },
+  cancelled: { dot: 'bg-red-400',     bg: 'bg-red-50',     border: 'border-red-100',     text: 'text-red-600',    label: 'Cancelled'   },
+};
+
+// ─── Timeline constants ───────────────────────────────────────────────────────
+
+const TIMELINE_START  = 7;   // 7 AM
+const TIMELINE_END    = 23;  // 11 PM
+const PX_PER_HOUR     = 60;
+const DEFAULT_DURATION = 60; // minutes, used when duration is unknown
+
+// ─── Availability default ─────────────────────────────────────────────────────
+
+interface AvailabilitySlot { day: string; enabled: boolean; from: string; to: string; }
 
 const DEFAULT_AVAILABILITY: AvailabilitySlot[] = [
   { day: 'Mon', enabled: true,  from: '09:00', to: '20:00' },
@@ -99,64 +100,48 @@ const DEFAULT_AVAILABILITY: AvailabilitySlot[] = [
   { day: 'Sun', enabled: false, from: '10:00', to: '18:00' },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmt12(h: number, m: number) {
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const hh = h % 12 || 12;
-  return `${hh}:${String(m).padStart(2, '0')} ${ampm}`;
-}
-
-function getWeekDates(anchor: Date): Date[] {
-  const monday = new Date(anchor);
-  const day = monday.getDay();
-  monday.setDate(anchor.getDate() - (day === 0 ? 6 : day - 1));
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return d;
-  });
-}
-
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-const STATUS_STYLE = {
-  confirmed:   { dot: 'bg-blue-500',   bg: 'bg-blue-50',   border: 'border-blue-100',   text: 'text-blue-700'  },
-  in_progress: { dot: 'bg-[#C84B31]',  bg: 'bg-[#FFF0EC]', border: 'border-[#FDDDD5]',  text: 'text-[#C84B31]' },
-  completed:   { dot: 'bg-green-500',  bg: 'bg-green-50',  border: 'border-green-100',  text: 'text-green-700' },
-};
-
-// ─── Week Calendar strip ──────────────────────────────────────────────────────
+// ─── Week strip ───────────────────────────────────────────────────────────────
 
 function WeekStrip({
-  weekDates,
-  selectedDate,
-  onSelect,
-  onPrev,
-  onNext,
-  jobs,
+  weekDates, selectedDate, onSelect, onPrev, onNext, bookings, todayStr,
 }: {
   weekDates: Date[];
   selectedDate: Date;
   onSelect: (d: Date) => void;
   onPrev: () => void;
   onNext: () => void;
-  jobs: ScheduledJob[];
+  bookings: Booking[];
+  todayStr: string;
 }) {
-  const todayStr = TODAY.toISOString().split('T')[0];
-  const selStr   = selectedDate.toISOString().split('T')[0];
+  const selStr = toDateStr(selectedDate);
+
+  const weekEarnings = bookings
+    .filter((b) => weekDates.some((d) => toDateStr(d) === b.date) && b.status !== 'cancelled')
+    .reduce((s, b) => s + b.total_price, 0);
+
+  const weekJobs = bookings.filter(
+    (b) => weekDates.some((d) => toDateStr(d) === b.date) && b.status !== 'cancelled',
+  );
+
+  const busiestDay = (() => {
+    const counts = weekDates.map((d) => ({
+      label: DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1],
+      count: bookings.filter((b) => b.date === toDateStr(d) && b.status !== 'cancelled').length,
+    }));
+    const max = counts.reduce((a, b) => (b.count > a.count ? b : a), counts[0]);
+    return max.count > 0 ? max.label : '—';
+  })();
 
   return (
-    <Card className="border border-[#EBEBEB] shadow-none bg-white mb-5">
+    <Card className="border border-[#EBEBEB] shadow-none bg-white mb-4">
       <CardContent className="p-4">
-        {/* Month + nav */}
+        {/* Month header + nav */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-[15px] text-[#1A1A1A]">
             {MONTH_NAMES[weekDates[0].getMonth()]}
             {weekDates[0].getMonth() !== weekDates[6].getMonth()
-              ? ` – ${MONTH_NAMES[weekDates[6].getMonth()]}` : ''
-            } {weekDates[0].getFullYear()}
+              ? ` – ${MONTH_NAMES[weekDates[6].getMonth()]}` : ''}{' '}
+            {weekDates[0].getFullYear()}
           </h2>
           <div className="flex items-center gap-1">
             <button
@@ -177,10 +162,10 @@ function WeekStrip({
         {/* Day cells */}
         <div className="grid grid-cols-7 gap-1">
           {weekDates.map((d, i) => {
-            const ds = d.toISOString().split('T')[0];
-            const isToday    = ds === todayStr;
-            const isSelected = ds === selStr;
-            const jobCount   = jobs.filter((j) => j.date === ds).length;
+            const ds       = toDateStr(d);
+            const isToday  = ds === todayStr;
+            const isSel    = ds === selStr;
+            const jobCount = bookings.filter((b) => b.date === ds && b.status !== 'cancelled').length;
 
             return (
               <button
@@ -188,32 +173,23 @@ function WeekStrip({
                 onClick={() => onSelect(d)}
                 className={cn(
                   'flex flex-col items-center py-2 rounded-xl transition-all',
-                  isSelected
-                    ? 'bg-[#C84B31] shadow-sm'
-                    : isToday
-                    ? 'bg-[#FFF0EC] border border-[#FDDDD5]'
-                    : 'hover:bg-[#F5F4F2]',
+                  isSel   ? 'bg-[#C84B31] shadow-sm'
+                  : isToday ? 'bg-[#FFF0EC] border border-[#FDDDD5]'
+                  : 'hover:bg-[#F5F4F2]',
                 )}
               >
-                <span className={cn(
-                  'text-[10px] font-medium mb-1',
-                  isSelected ? 'text-white/70' : 'text-[#9CA3AF]',
-                )}>
+                <span className={cn('text-[10px] font-medium mb-1', isSel ? 'text-white/70' : 'text-[#9CA3AF]')}>
                   {DAY_LABELS[i]}
                 </span>
                 <span className={cn(
                   'font-bold text-[15px] leading-none',
-                  isSelected ? 'text-white' : isToday ? 'text-[#C84B31]' : 'text-[#1A1A1A]',
+                  isSel ? 'text-white' : isToday ? 'text-[#C84B31]' : 'text-[#1A1A1A]',
                 )}>
                   {d.getDate()}
                 </span>
-                {/* Job dots */}
                 <div className="flex gap-0.5 mt-1.5 h-1.5">
                   {Array.from({ length: Math.min(jobCount, 3) }).map((_, k) => (
-                    <span
-                      key={k}
-                      className={cn('w-1 h-1 rounded-full', isSelected ? 'bg-white/70' : 'bg-[#C84B31]')}
-                    />
+                    <span key={k} className={cn('w-1 h-1 rounded-full', isSel ? 'bg-white/70' : 'bg-[#C84B31]')} />
                   ))}
                 </div>
               </button>
@@ -221,39 +197,22 @@ function WeekStrip({
           })}
         </div>
 
-        {/* Week summary */}
-        <div className="flex items-center gap-4 mt-4 pt-3 border-t border-[#EBEBEB]">
-          {(() => {
-            const weekJobs = jobs.filter((j) => weekDates.some((d) => d.toISOString().split('T')[0] === j.date));
-            const weekEarnings = weekJobs.reduce((s, j) => s + j.earnings, 0);
-            return (
-              <>
-                <div>
-                  <p className="text-[10px] text-[#9CA3AF] font-medium">This week</p>
-                  <p className="text-[13px] font-bold text-[#1A1A1A]">{weekJobs.length} jobs</p>
-                </div>
-                <div className="w-px h-6 bg-[#EBEBEB]" />
-                <div>
-                  <p className="text-[10px] text-[#9CA3AF] font-medium">Projected</p>
-                  <p className="text-[13px] font-bold text-[#C84B31]">₹{weekEarnings.toLocaleString()}</p>
-                </div>
-                <div className="w-px h-6 bg-[#EBEBEB]" />
-                <div>
-                  <p className="text-[10px] text-[#9CA3AF] font-medium">Busiest</p>
-                  <p className="text-[13px] font-bold text-[#1A1A1A]">
-                    {(() => {
-                      const counts = weekDates.map((d) => ({
-                        label: DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1],
-                        count: jobs.filter((j) => j.date === d.toISOString().split('T')[0]).length,
-                      }));
-                      const max = counts.reduce((a, b) => (b.count > a.count ? b : a), counts[0]);
-                      return max.count > 0 ? max.label : '—';
-                    })()}
-                  </p>
-                </div>
-              </>
-            );
-          })()}
+        {/* Week summary strip */}
+        <div className="flex items-center gap-4 mt-4 pt-3 border-t border-[#EBEBEB] flex-wrap">
+          <div>
+            <p className="text-[10px] text-[#9CA3AF] font-medium">This week</p>
+            <p className="text-[13px] font-bold text-[#1A1A1A]">{weekJobs.length} job{weekJobs.length !== 1 ? 's' : ''}</p>
+          </div>
+          <div className="w-px h-6 bg-[#EBEBEB]" />
+          <div>
+            <p className="text-[10px] text-[#9CA3AF] font-medium">Projected</p>
+            <p className="text-[13px] font-bold text-[#C84B31]">₹{fmt(weekEarnings)}</p>
+          </div>
+          <div className="w-px h-6 bg-[#EBEBEB]" />
+          <div>
+            <p className="text-[10px] text-[#9CA3AF] font-medium">Busiest</p>
+            <p className="text-[13px] font-bold text-[#1A1A1A]">{busiestDay}</p>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -262,114 +221,220 @@ function WeekStrip({
 
 // ─── Day Timeline ─────────────────────────────────────────────────────────────
 
-const TIMELINE_START = 8;  // 8 AM
-const TIMELINE_END   = 22; // 10 PM
-const PX_PER_HOUR    = 64;
+function DayTimeline({ date, bookings, todayStr }: { date: Date; bookings: Booking[]; todayStr: string }) {
+  const ds      = toDateStr(date);
+  const isToday = ds === todayStr;
+  const dayJobs = bookings
+    .filter((b) => b.date === ds && b.status !== 'cancelled')
+    .sort((a, b) => {
+      const ta = parseTime(a.time);
+      const tb = parseTime(b.time);
+      return (ta.h * 60 + ta.m) - (tb.h * 60 + tb.m);
+    });
 
-function DayTimeline({ date, jobs }: { date: Date; jobs: ScheduledJob[] }) {
-  const router = useRouter();
-  const ds = date.toISOString().split('T')[0];
-  const dayJobs = jobs.filter((j) => j.date === ds);
-  const hours = Array.from({ length: TIMELINE_END - TIMELINE_START }, (_, i) => TIMELINE_START + i);
-  const totalH = (TIMELINE_END - TIMELINE_START) * PX_PER_HOUR;
+  const hours    = Array.from({ length: TIMELINE_END - TIMELINE_START }, (_, i) => TIMELINE_START + i);
+  const totalH   = (TIMELINE_END - TIMELINE_START) * PX_PER_HOUR;
+  const now      = new Date();
+  const nowMinFS = isToday ? (now.getHours() - TIMELINE_START) * 60 + now.getMinutes() : -1;
+  const nowTop   = (nowMinFS / 60) * PX_PER_HOUR;
 
-  const isToday = ds === TODAY.toISOString().split('T')[0];
-  const now = TODAY; // in real app: new Date()
-  const nowMinFromStart = isToday
-    ? (now.getHours() - TIMELINE_START) * 60 + now.getMinutes()
-    : -1;
-  const nowTop = (nowMinFromStart / 60) * PX_PER_HOUR;
+  const dayIdx = date.getDay() === 0 ? 6 : date.getDay() - 1;
+  const dayEarnings = dayJobs.reduce((s, b) => s + b.total_price, 0);
 
   return (
-    <Card className="border border-[#EBEBEB] shadow-none bg-white mb-5">
+    <Card className="border border-[#EBEBEB] shadow-none bg-white">
       <CardContent className="p-4">
+        {/* Day header */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-[14px] text-[#1A1A1A]">
-            {isToday ? 'Today' : DAY_LABELS[(date.getDay() === 0 ? 6 : date.getDay() - 1)]},&nbsp;
-            {date.getDate()} {MONTH_NAMES[date.getMonth()]}
-          </h3>
+          <div>
+            <h3 className="font-bold text-[14px] text-[#1A1A1A]">
+              {isToday ? 'Today' : `${DAY_LABELS[dayIdx]}, ${date.getDate()} ${MONTH_NAMES[date.getMonth()]}`}
+            </h3>
+            {dayJobs.length > 0 && (
+              <p className="text-[11px] text-[#9CA3AF] mt-0.5">₹{fmt(dayEarnings)} projected</p>
+            )}
+          </div>
           <span className="text-[11px] font-semibold text-[#9CA3AF] bg-[#F5F4F2] border border-[#EBEBEB] px-2.5 py-1 rounded-full">
             {dayJobs.length} job{dayJobs.length !== 1 ? 's' : ''}
           </span>
         </div>
 
         {dayJobs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <p className="text-3xl mb-2">📅</p>
-            <p className="text-[13px] font-semibold text-[#1A1A1A]">No jobs scheduled</p>
-            <p className="text-[11px] text-[#9CA3AF] mt-0.5">Enjoy your free day</p>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#FFF0EC] flex items-center justify-center mb-3">
+              <Calendar className="w-5 h-5 text-[#C84B31]/40" />
+            </div>
+            <p className="text-[13px] font-semibold text-[#6B7280]">No jobs scheduled</p>
+            <p className="text-[11px] text-[#9CA3AF] mt-1">Enjoy your free day</p>
           </div>
         ) : (
-          <div className="relative overflow-x-auto">
+          /* ── Timeline ── */
+          <div className="relative overflow-x-hidden">
             <div className="relative" style={{ height: totalH }}>
-              {/* Hour lines */}
+              {/* Hour gridlines */}
               {hours.map((h) => (
                 <div
                   key={h}
-                  className="absolute left-0 right-0 flex items-center gap-2"
+                  className="absolute left-0 right-0 flex items-center gap-2 pointer-events-none"
                   style={{ top: (h - TIMELINE_START) * PX_PER_HOUR }}
                 >
-                  <span className="text-[10px] text-[#9CA3AF] w-10 shrink-0 text-right">
+                  <span className="text-[10px] text-[#9CA3AF] w-11 shrink-0 text-right select-none">
                     {fmt12(h, 0)}
                   </span>
                   <div className="flex-1 h-px bg-[#EBEBEB]" />
                 </div>
               ))}
 
-              {/* "Now" indicator */}
-              {isToday && nowMinFromStart >= 0 && nowMinFromStart < (TIMELINE_END - TIMELINE_START) * 60 && (
+              {/* "Now" red line */}
+              {isToday && nowMinFS >= 0 && nowMinFS < (TIMELINE_END - TIMELINE_START) * 60 && (
                 <div
-                  className="absolute left-12 right-0 flex items-center gap-1 z-20 pointer-events-none"
-                  style={{ top: nowTop }}
+                  className="absolute left-13 right-0 flex items-center gap-1 z-20 pointer-events-none"
+                  style={{ top: nowTop, left: '3.25rem' }}
                 >
-                  <div className="w-2 h-2 rounded-full bg-[#C84B31] shrink-0" />
+                  <div className="w-2 h-2 rounded-full bg-[#C84B31] shrink-0 -ml-1" />
                   <div className="flex-1 h-px bg-[#C84B31]" />
                 </div>
               )}
 
-              {/* Job blocks */}
-              {dayJobs.map((job) => {
-                const topMin  = (job.startHour - TIMELINE_START) * 60 + job.startMin;
-                const topPx   = (topMin / 60) * PX_PER_HOUR;
-                const heightPx = Math.max((job.durationMin / 60) * PX_PER_HOUR, 36);
-                const s = STATUS_STYLE[job.status];
-                const short = heightPx < 52;
+              {/* Booking blocks */}
+              {dayJobs.map((booking) => {
+                const { h, m }  = parseTime(booking.time);
+                const topMin    = (h - TIMELINE_START) * 60 + m;
+                const topPx     = (topMin / 60) * PX_PER_HOUR;
+                const heightPx  = Math.max((DEFAULT_DURATION / 60) * PX_PER_HOUR, 44);
+                const s         = STATUS_STYLE[booking.status] ?? STATUS_STYLE.pending;
+                const isShort   = heightPx < 56;
 
                 return (
-                  <button
-                    key={job.id}
-                    onClick={() => router.push('/provider/job-details')}
+                  <div
+                    key={booking.id}
                     className={cn(
-                      'absolute left-14 right-0 rounded-xl border px-3 py-2 text-left transition-all hover:brightness-95 z-10',
+                      'absolute rounded-xl border px-3 py-2 text-left transition-all hover:brightness-95 cursor-default z-10',
                       s.bg, s.border,
                     )}
-                    style={{ top: topPx, height: heightPx }}
+                    style={{ top: Math.max(topPx, 0), height: heightPx, left: '3.25rem', right: 0 }}
                   >
                     <div className="flex items-start justify-between gap-2 h-full overflow-hidden">
                       <div className="flex-1 min-w-0 overflow-hidden">
                         <p className={cn('font-bold text-[12px] leading-tight truncate', s.text)}>
-                          {job.service}
+                          {booking.service_name ?? 'Service'}
                         </p>
-                        {!short && (
+                        {!isShort ? (
                           <>
-                            <p className="text-[10px] text-[#6B7280] mt-0.5 truncate">{job.client}</p>
-                            <p className="text-[10px] text-[#9CA3AF] truncate">{fmt12(job.startHour, job.startMin)}</p>
+                            <p className="text-[10px] text-[#6B7280] mt-0.5 truncate">
+                              {booking.client_name ?? '—'}
+                            </p>
+                            <p className="text-[10px] text-[#9CA3AF] truncate flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5 shrink-0" />
+                              {booking.time}
+                            </p>
                           </>
-                        )}
-                        {short && (
-                          <p className="text-[10px] text-[#6B7280] truncate">{job.client} · {fmt12(job.startHour, job.startMin)}</p>
+                        ) : (
+                          <p className="text-[10px] text-[#6B7280] truncate">
+                            {booking.client_name ?? '—'} · {booking.time}
+                          </p>
                         )}
                       </div>
                       <span className={cn('text-[11px] font-bold shrink-0', s.text)}>
-                        ₹{job.earnings.toLocaleString()}
+                        ₹{fmt(booking.total_price)}
                       </span>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Week sidebar (desktop) ───────────────────────────────────────────────────
+
+function WeekSidebar({
+  weekDates, selectedDate, onSelect, bookings, todayStr,
+}: {
+  weekDates: Date[];
+  selectedDate: Date;
+  onSelect: (d: Date) => void;
+  bookings: Booking[];
+  todayStr: string;
+}) {
+  const selStr = toDateStr(selectedDate);
+
+  return (
+    <Card className="border border-[#EBEBEB] shadow-none bg-white sticky top-[73px]">
+      <CardContent className="p-5">
+        <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-4">This Week</p>
+        <div className="space-y-2">
+          {weekDates.map((d) => {
+            const ds      = toDateStr(d);
+            const isToday = ds === todayStr;
+            const isSel   = ds === selStr;
+            const dayJobs = bookings.filter((b) => b.date === ds && b.status !== 'cancelled');
+            const dayIdx  = d.getDay() === 0 ? 6 : d.getDay() - 1;
+            const earnings = dayJobs.reduce((s, b) => s + b.total_price, 0);
+
+            return (
+              <button
+                key={ds}
+                onClick={() => onSelect(d)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left',
+                  isSel   ? 'bg-[#FFF0EC] border-[#FDDDD5]'
+                  : isToday ? 'bg-white border-[#FDDDD5]'
+                  : 'bg-[#F5F4F2] border-transparent hover:border-[#EBEBEB]',
+                )}
+              >
+                <div className={cn(
+                  'w-9 h-9 rounded-xl flex flex-col items-center justify-center shrink-0',
+                  isSel ? 'bg-[#C84B31]' : isToday ? 'bg-white border border-[#FDDDD5]' : 'bg-white border border-[#EBEBEB]',
+                )}>
+                  <span className={cn('text-[9px] font-medium leading-none', isSel ? 'text-white/70' : 'text-[#9CA3AF]')}>
+                    {DAY_LABELS[dayIdx]}
+                  </span>
+                  <span className={cn('font-bold text-[13px] leading-none mt-0.5', isSel ? 'text-white' : isToday ? 'text-[#C84B31]' : 'text-[#1A1A1A]')}>
+                    {d.getDate()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  {dayJobs.length === 0 ? (
+                    <p className="text-[12px] text-[#9CA3AF]">Free day</p>
+                  ) : (
+                    <>
+                      <p className={cn('text-[12px] font-semibold truncate', isSel ? 'text-[#C84B31]' : 'text-[#1A1A1A]')}>
+                        {dayJobs.length} job{dayJobs.length !== 1 ? 's' : ''}
+                      </p>
+                      <p className="text-[10px] text-[#9CA3AF] truncate">
+                        {dayJobs.map((b) => b.service_name ?? 'Service').join(', ')}
+                      </p>
+                    </>
+                  )}
+                </div>
+                {dayJobs.length > 0 && (
+                  <span className={cn('text-[11px] font-bold shrink-0', isSel ? 'text-[#C84B31]' : 'text-[#6B7280]')}>
+                    ₹{fmt(earnings)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="mt-4 pt-4 border-t border-[#EBEBEB] space-y-1.5">
+          <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2">Legend</p>
+          {(['pending', 'confirmed', 'active', 'completed'] as const).map((k) => {
+            const s = STATUS_STYLE[k];
+            return (
+              <div key={k} className="flex items-center gap-2">
+                <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', s.dot)} />
+                <span className="text-[11px] text-[#6B7280]">{s.label}</span>
+              </div>
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );
@@ -382,31 +447,29 @@ function AvailabilityManager() {
   const [saved, setSaved] = useState(false);
 
   const toggle = (i: number) => {
-    setSlots((prev) => prev.map((s, idx) => idx === i ? { ...s, enabled: !s.enabled } : s));
+    setSlots((p) => p.map((s, idx) => idx === i ? { ...s, enabled: !s.enabled } : s));
     setSaved(false);
   };
 
   const update = (i: number, field: 'from' | 'to', val: string) => {
-    setSlots((prev) => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
+    setSlots((p) => p.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
     setSaved(false);
   };
-
-  const handleSave = () => setSaved(true);
 
   return (
     <Card className="border border-[#EBEBEB] shadow-none bg-white">
       <CardContent className="p-4 sm:p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Availability</p>
-            <p className="text-[12px] text-[#6B7280] mt-0.5">Set when you're open for bookings</p>
+            <p className="font-bold text-[14px] text-[#1A1A1A]">Working Hours</p>
+            <p className="text-[12px] text-[#6B7280] mt-0.5">Set when you're available for bookings</p>
           </div>
           <button
-            onClick={handleSave}
+            onClick={() => setSaved(true)}
             className={cn(
               'h-8 px-3 rounded-lg text-[12px] font-semibold transition-colors border',
               saved
-                ? 'bg-green-50 border-green-100 text-green-600'
+                ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                 : 'bg-[#C84B31] border-[#C84B31] text-white hover:bg-[#B04028]',
             )}
           >
@@ -437,26 +500,20 @@ function AvailabilityManager() {
                 )} />
               </button>
 
-              {/* Day label */}
-              <span className={cn(
-                'text-[13px] font-semibold w-8 shrink-0',
-                slot.enabled ? 'text-[#1A1A1A]' : 'text-[#9CA3AF]',
-              )}>
+              <span className={cn('text-[13px] font-semibold w-8 shrink-0', slot.enabled ? 'text-[#1A1A1A]' : 'text-[#9CA3AF]')}>
                 {slot.day}
               </span>
 
               {slot.enabled ? (
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <input
-                    type="time"
-                    value={slot.from}
+                    type="time" value={slot.from}
                     onChange={(e) => update(i, 'from', e.target.value)}
                     className="flex-1 min-w-0 text-[12px] font-medium text-[#1A1A1A] bg-[#F5F4F2] border border-[#EBEBEB] rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#C84B31]"
                   />
                   <span className="text-[11px] text-[#9CA3AF] shrink-0">to</span>
                   <input
-                    type="time"
-                    value={slot.to}
+                    type="time" value={slot.to}
                     onChange={(e) => update(i, 'to', e.target.value)}
                     className="flex-1 min-w-0 text-[12px] font-medium text-[#1A1A1A] bg-[#F5F4F2] border border-[#EBEBEB] rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#C84B31]"
                   />
@@ -468,9 +525,9 @@ function AvailabilityManager() {
           ))}
         </div>
 
-        {/* Active days summary */}
+        {/* Active summary */}
         <div className="mt-4 pt-3 border-t border-[#EBEBEB] flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-[#9CA3AF]">Active:</span>
+          <span className="text-[11px] text-[#9CA3AF]">Active days:</span>
           {slots.filter((s) => s.enabled).map((s) => (
             <span key={s.day} className="text-[10px] font-bold text-[#C84B31] bg-[#FFF0EC] border border-[#FDDDD5] px-2 py-0.5 rounded-full">
               {s.day}
@@ -482,16 +539,31 @@ function AvailabilityManager() {
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 type View = 'week' | 'availability';
 
 export default function Schedule() {
-  const [view, setView]               = useState<View>('week');
-  const [weekAnchor, setWeekAnchor]   = useState(TODAY);
-  const [selectedDate, setSelectedDate] = useState(TODAY);
+  const today      = useMemo(() => new Date(), []);
+  const todayStr   = useMemo(() => toDateStr(today), [today]);
 
-  const weekDates = getWeekDates(weekAnchor);
+  const [view,         setView]         = useState<View>('week');
+  const [weekAnchor,   setWeekAnchor]   = useState(today);
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [bookings,     setBookings]     = useState<Booking[]>([]);
+  const [loading,      setLoading]      = useState(true);
+
+  const weekDates = useMemo(() => getWeekDates(weekAnchor), [weekAnchor]);
+
+  const load = () => {
+    setLoading(true);
+    providersAPI.getMyJobs()
+      .then(({ data }) => setBookings(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
 
   const shiftWeek = (dir: 1 | -1) => {
     const next = new Date(weekAnchor);
@@ -500,32 +572,74 @@ export default function Schedule() {
     setSelectedDate(next);
   };
 
-  return (
-    <ProviderLayout title="Schedule" subtitle="Wednesday, 14 March 2025">
+  // Stats for top bar
+  const totalBookings   = bookings.filter((b) => b.status !== 'cancelled').length;
+  const activeToday     = bookings.filter((b) => b.date === todayStr && b.status !== 'cancelled').length;
+  const upcomingCount   = bookings.filter((b) => b.date >= todayStr && ['pending', 'confirmed'].includes(b.status)).length;
 
-      {/* ── View toggle ─────────────────────────────────────────────────── */}
-      <div className="flex gap-1 bg-[#F5F4F2] p-1 rounded-xl mb-5 w-full sm:w-auto sm:inline-flex">
-        {(['week', 'availability'] as View[]).map((v) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            className={cn(
-              'flex-1 sm:flex-none px-4 py-2 rounded-lg text-[12px] font-semibold transition-all capitalize',
-              view === v
-                ? 'bg-white text-[#C84B31] shadow-sm'
-                : 'text-[#9CA3AF] hover:text-[#6B7280]',
-            )}
-          >
-            {v === 'week' ? '📅 Calendar' : '⏰ Availability'}
-          </button>
-        ))}
+  return (
+    <ProviderLayout title="Schedule" subtitle={todaySubtitle()}>
+
+      {/* ── Top quick-stats ── */}
+      {!loading && (
+        <div className="grid grid-cols-3 gap-2 md:gap-3 mb-5">
+          {[
+            { label: 'All Jobs',   value: String(totalBookings), Icon: Briefcase },
+            { label: 'Today',      value: String(activeToday),   Icon: Calendar  },
+            { label: 'Upcoming',   value: String(upcomingCount), Icon: Clock     },
+          ].map(({ label, value, Icon }) => (
+            <Card key={label} className="border border-[#EBEBEB] shadow-none bg-white">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-[#FFF0EC] flex items-center justify-center shrink-0">
+                  <Icon className="w-3.5 h-3.5 text-[#C84B31]" />
+                </div>
+                <div>
+                  <p className="font-bold text-[16px] text-[#1A1A1A] leading-none">{value}</p>
+                  <p className="text-[10px] text-[#9CA3AF] mt-0.5">{label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ── View toggle + refresh ── */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex gap-1 bg-[#F5F4F2] p-1 rounded-xl">
+          {(['week', 'availability'] as View[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                'px-4 py-2 rounded-lg text-[12px] font-semibold transition-all',
+                view === v ? 'bg-white text-[#C84B31] shadow-sm' : 'text-[#9CA3AF] hover:text-[#6B7280]',
+              )}
+            >
+              {v === 'week' ? '📅 Calendar' : '⏰ Hours'}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="flex items-center gap-1.5 text-[12px] text-[#C84B31] font-medium hover:text-[#B04028] disabled:opacity-50 transition-colors"
+        >
+          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+          Refresh
+        </button>
       </div>
 
-      {/* ── Calendar view ───────────────────────────────────────────────── */}
-      {view === 'week' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
+      {/* ── Loading skeleton ── */}
+      {loading && (
+        <div className="space-y-3">
+          <div className="h-[200px] rounded-2xl bg-[#F5F4F2] animate-pulse" />
+          <div className="h-[400px] rounded-2xl bg-[#F5F4F2] animate-pulse" />
+        </div>
+      )}
 
-          {/* Left: week strip + day timeline */}
+      {/* ── Calendar view ── */}
+      {!loading && view === 'week' && (
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
           <div>
             <WeekStrip
               weekDates={weekDates}
@@ -533,91 +647,25 @@ export default function Schedule() {
               onSelect={setSelectedDate}
               onPrev={() => shiftWeek(-1)}
               onNext={() => shiftWeek(1)}
-              jobs={JOBS}
+              bookings={bookings}
+              todayStr={todayStr}
             />
-            <DayTimeline date={selectedDate} jobs={JOBS} />
+            <DayTimeline date={selectedDate} bookings={bookings} todayStr={todayStr} />
           </div>
-
-          {/* Right: upcoming list for the week */}
-          <div className="hidden lg:block sticky top-[73px]">
-            <Card className="border border-[#EBEBEB] shadow-none bg-white">
-              <CardContent className="p-5">
-                <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-4">This Week</p>
-                <div className="space-y-3">
-                  {weekDates.map((d) => {
-                    const ds = d.toISOString().split('T')[0];
-                    const dayJobs = JOBS.filter((j) => j.date === ds);
-                    const isToday = ds === TODAY.toISOString().split('T')[0];
-                    const isSel   = ds === selectedDate.toISOString().split('T')[0];
-                    const dayIdx  = d.getDay() === 0 ? 6 : d.getDay() - 1;
-
-                    return (
-                      <button
-                        key={ds}
-                        onClick={() => setSelectedDate(d)}
-                        className={cn(
-                          'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left',
-                          isSel ? 'bg-[#FFF0EC] border-[#FDDDD5]' : 'bg-[#F5F4F2] border-transparent hover:border-[#EBEBEB]',
-                        )}
-                      >
-                        <div className={cn(
-                          'w-9 h-9 rounded-xl flex flex-col items-center justify-center shrink-0',
-                          isSel ? 'bg-[#C84B31]' : isToday ? 'bg-white border border-[#FDDDD5]' : 'bg-white border border-[#EBEBEB]',
-                        )}>
-                          <span className={cn('text-[9px] font-medium leading-none', isSel ? 'text-white/70' : 'text-[#9CA3AF]')}>
-                            {DAY_LABELS[dayIdx]}
-                          </span>
-                          <span className={cn('font-bold text-[13px] leading-none mt-0.5', isSel ? 'text-white' : isToday ? 'text-[#C84B31]' : 'text-[#1A1A1A]')}>
-                            {d.getDate()}
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          {dayJobs.length === 0 ? (
-                            <p className="text-[12px] text-[#9CA3AF]">Free day</p>
-                          ) : (
-                            <>
-                              <p className={cn('text-[12px] font-semibold', isSel ? 'text-[#C84B31]' : 'text-[#1A1A1A]')}>
-                                {dayJobs.length} job{dayJobs.length !== 1 ? 's' : ''}
-                              </p>
-                              <p className="text-[10px] text-[#9CA3AF] truncate">
-                                {dayJobs.map((j) => j.service).join(', ')}
-                              </p>
-                            </>
-                          )}
-                        </div>
-                        {dayJobs.length > 0 && (
-                          <span className={cn('text-[11px] font-bold shrink-0', isSel ? 'text-[#C84B31]' : 'text-[#6B7280]')}>
-                            ₹{dayJobs.reduce((s, j) => s + j.earnings, 0).toLocaleString()}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Legend */}
-                <div className="mt-4 pt-4 border-t border-[#EBEBEB] space-y-1.5">
-                  <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2">Legend</p>
-                  {[
-                    { s: STATUS_STYLE.confirmed,   label: 'Confirmed'   },
-                    { s: STATUS_STYLE.in_progress, label: 'In Progress' },
-                    { s: STATUS_STYLE.completed,   label: 'Completed'   },
-                  ].map(({ s, label }) => (
-                    <div key={label} className="flex items-center gap-2">
-                      <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', s.dot)} />
-                      <span className="text-[11px] text-[#6B7280]">{label}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+          <div className="hidden lg:block">
+            <WeekSidebar
+              weekDates={weekDates}
+              selectedDate={selectedDate}
+              onSelect={setSelectedDate}
+              bookings={bookings}
+              todayStr={todayStr}
+            />
           </div>
-
         </div>
       )}
 
-      {/* ── Availability view ────────────────────────────────────────────── */}
-      {view === 'availability' && (
+      {/* ── Availability view ── */}
+      {!loading && view === 'availability' && (
         <div className="max-w-lg">
           <AvailabilityManager />
         </div>

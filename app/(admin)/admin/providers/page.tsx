@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, Filter, Check, X, Star, MapPin, Phone,
   ChevronRight, TrendingUp, TrendingDown, Users,
@@ -280,11 +280,20 @@ function EmptyState({ icon, label, sub }: { icon: string; label: string; sub: st
 import { exportToExcel } from '@/lib/exportExcel';
 
 export default function AdminServiceProviders() {
-  const router   = useRouter();
-  const { toast } = useToast();
+  const router       = useRouter();
+  const searchParams  = useSearchParams();
+  const { toast }    = useToast();
 
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>('all');
+
+  // Sync tab from URL param (e.g. ?tab=pending from notification bell click)
+  useEffect(() => {
+    const tab = searchParams.get('tab') as TabKey | null;
+    if (tab && ['all', 'active', 'pending', 'suspended', 'top'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
   const [search, setSearch]       = useState('');
   const [sortBy, setSortBy]       = useState<'rating' | 'jobs' | 'earnings' | 'recent'>('recent');
   const [showFilters, setShowFilters] = useState(false);

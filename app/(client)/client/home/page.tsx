@@ -11,6 +11,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { authAPI, couponsAPI, categoriesAPI, packagesAPI, servicesAPI } from '@/lib/api';
 import { useCart } from '@/config/context/CartContext';
+import { CartQtyButton } from '@/components/client/CartQtyButton';
 import {
   BannerSkeleton,
   CategoryRowSkeleton,
@@ -101,7 +102,7 @@ function ProviderRegistrationModal({
         services_offered: [],
         location: address,
       });
-      toast({ title: 'Registration complete! 🎉', description: 'Awaiting admin approval. Your dashboard is ready.' });
+      toast({ title: "Application submitted! 🎉", description: "We'll verify your request within 24 hours. You'll be notified once approved." });
       onSuccess();
     } catch (err: any) {
       toast({ title: 'Registration failed', description: err?.response?.data?.detail ?? err.message, variant: 'destructive' });
@@ -198,12 +199,12 @@ export default function Home() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const { addItem } = useCart();
-  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  useCart(); // CartQtyButton components handle cart internally
   const [userLocation, setUserLocation] = useState('Mumbai, Maharashtra');
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isProvider, setIsProvider] = useState(false);
+  const [isProviderApproved, setIsProviderApproved] = useState(false);
   const [providerStatusLoading, setProviderStatusLoading] = useState(true);
   const [showProviderModal, setShowProviderModal] = useState(false);
 
@@ -300,13 +301,31 @@ export default function Home() {
         try {
           const snap = await getDoc(doc(db, 'users', user.uid));
           const role = snap.data()?.role;
-          setIsProvider(role === 'service_provider');
+          if (role === 'service_provider' || role === 'pending_sp') {
+            setIsProvider(true);
+            if (role === 'pending_sp') {
+              // pending_sp always means not yet approved
+              setIsProviderApproved(false);
+            } else {
+              try {
+                const provSnap = await getDoc(doc(db, 'provider_profiles', user.uid));
+                setIsProviderApproved(provSnap.exists() && provSnap.data()?.is_approved === true);
+              } catch {
+                setIsProviderApproved(false);
+              }
+            }
+          } else {
+            setIsProvider(false);
+            setIsProviderApproved(false);
+          }
         } catch {
           setIsProvider(false);
+          setIsProviderApproved(false);
         }
         fetchCoupons(user);
       } else {
         setIsProvider(false);
+        setIsProviderApproved(false);
       }
       setProviderStatusLoading(false);
     });
@@ -344,36 +363,20 @@ export default function Home() {
   }, []);
 
   const handleProviderButtonClick = () => {
-    if (isProvider) {
+    if (isProvider && isProviderApproved) {
       router.push('/provider');
-    } else {
+    } else if (!isProvider) {
       if (!currentUser) { router.push('/login'); return; }
       setShowProviderModal(true);
     }
+    // if pending approval → button is disabled; do nothing
   };
 
   const handleProviderRegistrationSuccess = () => {
     setIsProvider(true);
+    setIsProviderApproved(false);
     setShowProviderModal(false);
-    router.push('/provider');
-  };
-
-  const handleAddToCart = async (
-    id: string,
-    name: string,
-    price: number,
-    type: 'service' | 'package',
-    duration?: string
-  ) => {
-    await addItem({
-      [type === 'service' ? 'service_id' : 'package_id']: id,
-      name,
-      price,
-      duration,
-      quantity: 1,
-    });
-    setAddedIds((prev) => new Set(prev).add(id));
-    setTimeout(() => setAddedIds((prev) => { const n = new Set(prev); n.delete(id); return n; }), 2000);
+    // Do NOT redirect to /provider — user must wait for admin approval
   };
 
   return (
@@ -400,12 +403,28 @@ export default function Home() {
             </button>
             <div className="flex items-center gap-3">
               {!providerStatusLoading && (
-                <button
-                  onClick={handleProviderButtonClick}
-                  className="text-[#e5849c] border border-[#e5849c]/50 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all"
-                >
-                  {isProvider ? 'My Provider' : 'Earn with us'}
-                </button>
+                isProvider && isProviderApproved ? (
+                  <button
+                    onClick={() => router.push('/provider')}
+                    className="text-[#e5849c] border border-[#e5849c]/50 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all"
+                  >
+                    My Provider
+                  </button>
+                ) : isProvider ? (
+                  <button
+                    disabled
+                    className="text-amber-500 border border-amber-300/50 text-xs font-semibold px-3 py-1.5 rounded-full cursor-not-allowed opacity-80"
+                  >
+                    ⏳ Approval Pending
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleProviderButtonClick}
+                    className="text-[#e5849c] border border-[#e5849c]/50 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all"
+                  >
+                    Earn with us
+                  </button>
+                )
               )}
               <button aria-label="Notifications">
                 <Bell size={20} className="text-white/70" />
@@ -441,12 +460,28 @@ export default function Home() {
               {isLoadingLocation ? 'Detecting location…' : userLocation}
             </div>
             {!providerStatusLoading && (
-              <button
-                onClick={handleProviderButtonClick}
-                className="text-[#e5849c] border border-[#e5849c]/40 text-xs font-semibold px-4 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all"
-              >
-                {isProvider ? 'Go to Provider Dashboard →' : 'Earn with AmaraGo →'}
-              </button>
+              isProvider && isProviderApproved ? (
+                <button
+                  onClick={() => router.push('/provider')}
+                  className="text-[#e5849c] border border-[#e5849c]/40 text-xs font-semibold px-4 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all"
+                >
+                  Go to Provider Dashboard →
+                </button>
+              ) : isProvider ? (
+                <button
+                  disabled
+                  className="text-amber-500 border border-amber-300/40 text-xs font-semibold px-4 py-1.5 rounded-full cursor-not-allowed opacity-80"
+                >
+                  ⏳ Waiting for Admin Approval
+                </button>
+              ) : (
+                <button
+                  onClick={handleProviderButtonClick}
+                  className="text-[#e5849c] border border-[#e5849c]/40 text-xs font-semibold px-4 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all"
+                >
+                  Earn with AmaraGo →
+                </button>
+              )
             )}
           </div>
         </div>
@@ -597,14 +632,12 @@ export default function Home() {
                         {pkg.time && <p className="text-[10px] text-gray-400 mb-0.5 flex items-center gap-1"><Clock size={10} />{pkg.time}</p>}
                         <p className="text-xl font-extrabold text-[#e5849c]">{pkg.price}</p>
                       </div>
-                      <button
-                        onClick={() => handleAddToCart(pkg.id, pkg.name, parseFloat(pkg.price.replace(/[^0-9.]/g, '')), 'package', pkg.time)}
-                        className={`flex items-center gap-1 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all ${
-                          addedIds.has(pkg.id) ? 'bg-green-500 text-white' : 'bg-[#111827] hover:bg-[#1f2937] text-white'
-                        }`}
-                      >
-                        {addedIds.has(pkg.id) ? '✓ Added' : '+ Add'}
-                      </button>
+                      <CartQtyButton
+                        packageId={pkg.id}
+                        name={pkg.name}
+                        price={parseFloat(pkg.price.replace(/[^0-9.]/g, ''))}
+                        duration={pkg.time}
+                      />
                     </div>
                   </div>
                 </div>
@@ -675,17 +708,12 @@ export default function Home() {
                         <p className="text-[10px] text-gray-400 line-through">{service.originalPrice}</p>
                       )}
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddToCart(service.id, service.name, typeof service.discountedPrice === 'number' ? service.discountedPrice : parseFloat(String(service.discountedPrice).replace(/[^0-9.]/g,'')), 'service', service.duration);
-                      }}
-                      className={`flex items-center gap-1 text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
-                        addedIds.has(service.id) ? 'bg-green-500 text-white' : 'bg-[#e5849c] hover:bg-[#d4738b] text-white'
-                      }`}
-                    >
-                      {addedIds.has(service.id) ? '✓ Added' : '+ Add'}
-                    </button>
+                    <CartQtyButton
+                      serviceId={service.id}
+                      name={service.name}
+                      price={typeof service.discountedPrice === 'number' ? service.discountedPrice : parseFloat(String(service.discountedPrice).replace(/[^0-9.]/g, ''))}
+                      duration={service.duration}
+                    />
                   </div>
                 </div>
               ))}

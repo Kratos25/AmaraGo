@@ -7,13 +7,13 @@ import {
   MoreHorizontal, Eye, X, RefreshCw, Download,
   SlidersHorizontal, IndianRupee, Star,
   TrendingUp, AlertTriangle, CheckCircle2,
-  CalendarClock, Calendar, Ban, Phone,
+  CalendarClock, Calendar, Ban, Phone, UserPlus, Check, Loader2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
 import AdminLayout from '../_components/AdminLayout';
-import { bookingsAPI, type Booking as APIBooking } from '@/lib/api';
+import { bookingsAPI, providersAPI, type Booking as APIBooking, type ProviderProfile } from '@/lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -28,6 +28,7 @@ interface Booking {
   clientPhone: string;
   provider: string;
   providerEmoji: string;
+  providerId?: string;
   service: string;
   category: string;
   location: string;
@@ -55,12 +56,13 @@ function mapBooking(b: APIBooking): Booking {
   };
   return {
     id:              b.id,
-    bookingRef:      b.id.substring(0, 8).toUpperCase(),
+    bookingRef:      b.booking_ref ?? b.id.substring(0, 8).toUpperCase(),
     client:          b.client_name ?? 'Unknown',
     clientEmoji:     '👤',
     clientPhone:     b.client_phone ?? '',
     provider:        b.provider_name ?? 'Searching…',
     providerEmoji:   b.provider_id ? '✨' : '🔍',
+    providerId:      b.provider_id,
     service:         b.service_name ?? 'Service',
     category:        '',
     location:        b.address ?? '',
@@ -96,12 +98,148 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'cancelled',   label: 'Cancelled'   },
 ];
 
+// ─── Assign Provider Modal ────────────────────────────────────────────────────
+
+function AssignProviderModal({
+  booking,
+  onClose,
+  onAssigned,
+}: {
+  booking: Booking;
+  onClose: () => void;
+  onAssigned: (bookingId: string, provider: ProviderProfile) => void;
+}) {
+  const { toast } = useToast();
+  const [providers, setProviders] = useState<ProviderProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<string | null>(booking.providerId ?? null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    providersAPI.list({ approved: true })
+      .then(({ data }) => setProviders(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = providers.filter((p) =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    (p.location ?? '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleAssign = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    try {
+      await bookingsAPI.assignProvider(booking.id, selected);
+      const prov = providers.find((p) => p.uid === selected)!;
+      onAssigned(booking.id, prov);
+      toast({ title: `Assigned to ${prov.name}`, description: `Booking ${booking.bookingRef} is now confirmed.` });
+      onClose();
+    } catch (err: any) {
+      toast({ title: 'Assignment failed', description: err?.response?.data?.detail ?? 'Try again.', variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="bg-[#1A1A1A] px-5 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-[15px] font-bold text-white">Assign Service Provider</h2>
+            <p className="text-[11px] text-white/40 mt-0.5">{booking.bookingRef} · {booking.service}</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/20 transition-colors">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-4 pt-4 pb-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or location…"
+              className="w-full pl-9 pr-4 py-2.5 text-[12px] bg-[#F5F4F2] border border-[#EBEBEB] rounded-xl focus:outline-none focus:border-[#C84B31] text-[#1A1A1A] placeholder:text-[#9CA3AF]"
+            />
+          </div>
+        </div>
+
+        {/* Provider list */}
+        <div className="px-4 pb-2 max-h-72 overflow-y-auto space-y-2">
+          {loading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-5 h-5 text-[#C84B31] animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-[12px] text-[#9CA3AF] py-8">No approved providers found</p>
+          ) : filtered.map((p) => (
+            <button
+              key={p.uid}
+              onClick={() => setSelected(p.uid === selected ? null : p.uid)}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all',
+                selected === p.uid
+                  ? 'bg-[#FFF0EC] border-[#C84B31]/40'
+                  : 'bg-[#F5F4F2] border-[#EBEBEB] hover:border-[#C84B31]/30',
+              )}
+            >
+              {/* Avatar */}
+              <div className="w-10 h-10 rounded-full bg-[#C84B31]/10 border border-[#FDDDD5] flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                {p.profile_image
+                  ? <img src={p.profile_image} alt={p.name} className="w-full h-full object-cover" />
+                  : '👤'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold text-[#1A1A1A] truncate">{p.name}</p>
+                <p className="text-[10px] text-[#9CA3AF] truncate">{p.location} · {p.experience_years}yr exp</p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                  <span className="text-[10px] text-[#6B7280]">{p.rating?.toFixed(1) ?? '–'} · {p.total_jobs} jobs</span>
+                </div>
+              </div>
+              <div className={cn(
+                'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
+                selected === p.uid ? 'bg-[#C84B31] border-[#C84B31]' : 'border-[#EBEBEB]',
+              )}>
+                {selected === p.uid && <Check className="w-3 h-3 text-white" />}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-4 border-t border-[#EBEBEB] flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-[#EBEBEB] text-[13px] font-semibold text-[#6B7280] hover:bg-[#F5F4F2] transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleAssign}
+            disabled={!selected || submitting}
+            className="flex-1 py-2.5 rounded-xl bg-[#C84B31] text-white text-[13px] font-semibold hover:bg-[#B04028] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+            {submitting ? 'Assigning…' : 'Assign Provider'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Booking Card ─────────────────────────────────────────────────────────────
 
-function BookingCard({ booking, onCancel, onView }: {
+function BookingCard({ booking, onCancel, onView, onAssign }: {
   booking: Booking;
   onCancel: (id: string) => void;
   onView:   (id: string) => void;
+  onAssign: (booking: Booking) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const sc = STATUS_CONFIG[booking.status];
@@ -142,9 +280,16 @@ function BookingCard({ booking, onCancel, onView }: {
                     <button onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#1A1A1A] hover:bg-[#F5F4F2]">
                       <Phone className="w-3.5 h-3.5 text-[#9CA3AF]" /> Call Client
                     </button>
-                    <button onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#1A1A1A] hover:bg-[#F5F4F2]">
-                      <Phone className="w-3.5 h-3.5 text-[#9CA3AF]" /> Call Provider
-                    </button>
+                    {booking.providerId && (
+                      <button onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#1A1A1A] hover:bg-[#F5F4F2]">
+                        <Phone className="w-3.5 h-3.5 text-[#9CA3AF]" /> Call Provider
+                      </button>
+                    )}
+                    {booking.status !== 'completed' && booking.status !== 'cancelled' && (
+                      <button onClick={() => { onAssign(booking); setMenuOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#C84B31] hover:bg-[#FFF0EC]">
+                        <UserPlus className="w-3.5 h-3.5" /> {booking.providerId ? 'Reassign SP' : 'Assign SP'}
+                      </button>
+                    )}
                     {(booking.status === 'confirmed' || booking.status === 'searching') && (
                       <>
                         <div className="border-t border-[#EBEBEB] my-1" />
@@ -252,13 +397,24 @@ function BookingCard({ booking, onCancel, onView }: {
         </div>
 
         {/* CTA */}
-        <button
-          onClick={() => onView(booking.id)}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-[#F5F4F2] border border-[#EBEBEB] rounded-xl hover:bg-[#FFF0EC] hover:border-[#FDDDD5] transition-colors group"
-        >
-          <span className="text-[12px] font-semibold text-[#6B7280] group-hover:text-[#C84B31] transition-colors">View Full Details</span>
-          <ChevronRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#C84B31] group-hover:translate-x-0.5 transition-all" />
-        </button>
+        <div className="flex gap-2">
+          {booking.status !== 'completed' && booking.status !== 'cancelled' && (
+            <button
+              onClick={() => onAssign(booking)}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#C84B31] text-white rounded-xl text-[12px] font-semibold hover:bg-[#B04028] transition-colors shrink-0"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              {booking.providerId ? 'Reassign' : 'Assign SP'}
+            </button>
+          )}
+          <button
+            onClick={() => onView(booking.id)}
+            className="flex-1 flex items-center justify-between px-4 py-2.5 bg-[#F5F4F2] border border-[#EBEBEB] rounded-xl hover:bg-[#FFF0EC] hover:border-[#FDDDD5] transition-colors group"
+          >
+            <span className="text-[12px] font-semibold text-[#6B7280] group-hover:text-[#C84B31] transition-colors">View Details</span>
+            <ChevronRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#C84B31] group-hover:translate-x-0.5 transition-all" />
+          </button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -266,10 +422,11 @@ function BookingCard({ booking, onCancel, onView }: {
 
 // ─── Table Row (desktop list view) ───────────────────────────────────────────
 
-function BookingRow({ booking, onCancel, onView }: {
+function BookingRow({ booking, onCancel, onView, onAssign }: {
   booking: Booking;
   onCancel: (id: string) => void;
   onView:   (id: string) => void;
+  onAssign: (booking: Booking) => void;
 }) {
   const sc = STATUS_CONFIG[booking.status];
   return (
@@ -317,6 +474,11 @@ function BookingRow({ booking, onCancel, onView }: {
           <button onClick={() => onView(booking.id)} className="w-7 h-7 rounded-lg bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-[#FFF0EC] hover:text-[#C84B31] transition-colors">
             <Eye className="w-3.5 h-3.5" />
           </button>
+          {booking.status !== 'completed' && booking.status !== 'cancelled' && (
+            <button onClick={() => onAssign(booking)} className="w-7 h-7 rounded-lg bg-[#FFF0EC] border border-[#FDDDD5] flex items-center justify-center text-[#C84B31] hover:bg-[#C84B31] hover:text-white transition-colors" title="Assign SP">
+              <UserPlus className="w-3.5 h-3.5" />
+            </button>
+          )}
           {(booking.status === 'confirmed' || booking.status === 'searching') && (
             <button onClick={() => onCancel(booking.id)} className="w-7 h-7 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center text-red-500 hover:bg-red-100 transition-colors">
               <X className="w-3.5 h-3.5" />
@@ -355,6 +517,7 @@ export default function AdminBookings() {
   const [viewMode, setViewMode]       = useState<'card' | 'table'>('card');
   const [showFilters, setShowFilters] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [assignModal, setAssignModal] = useState<Booking | null>(null);
 
   useEffect(() => {
     bookingsAPI.list().then(({ data }) => setBookings(data.map(mapBooking))).catch(() => {});
@@ -412,6 +575,13 @@ export default function AdminBookings() {
     toast({ title: `Booking ${b?.bookingRef} cancelled`, description: 'Client and provider have been notified.' });
   };
 
+  const handleAssigned = (bookingId: string, provider: ProviderProfile) => {
+    setBookings((prev) => prev.map((x) => x.id === bookingId
+      ? { ...x, provider: provider.name, providerEmoji: '✨', providerId: provider.uid, status: 'confirmed' }
+      : x
+    ));
+  };
+
   const handleView = (id: string) => router.push(`/admin/bookings/${id}`);
 
   const handleExport = () => {
@@ -438,6 +608,7 @@ export default function AdminBookings() {
   };
 
   return (
+    <>
     <AdminLayout
       title="Bookings"
       subtitle="Monitor and manage all platform bookings"
@@ -599,6 +770,7 @@ export default function AdminBookings() {
               booking={booking}
               onCancel={handleCancel}
               onView={handleView}
+              onAssign={setAssignModal}
             />
           ))}
         </div>
@@ -623,6 +795,7 @@ export default function AdminBookings() {
                     booking={booking}
                     onCancel={handleCancel}
                     onView={handleView}
+                    onAssign={setAssignModal}
                   />
                 ))}
               </tbody>
@@ -639,5 +812,15 @@ export default function AdminBookings() {
       )}
 
     </AdminLayout>
+
+    {/* Assign Provider Modal */}
+    {assignModal && (
+      <AssignProviderModal
+        booking={assignModal}
+        onClose={() => setAssignModal(null)}
+        onAssigned={handleAssigned}
+      />
+    )}
+    </>
   );
 }

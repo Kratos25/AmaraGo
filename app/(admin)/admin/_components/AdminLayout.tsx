@@ -164,7 +164,7 @@ interface AdminLayoutProps {
 // ─── Sidebar NavItem ──────────────────────────────────────────────────────────
 
 function NavItem({
-  href, label, Icon, active, onClick, compact = false,
+  href, label, Icon, active, onClick, compact = false, badge,
 }: {
   href: string;
   label: string;
@@ -172,6 +172,7 @@ function NavItem({
   active: boolean;
   onClick: () => void;
   compact?: boolean;
+  badge?: number;
 }) {
   return (
     <button
@@ -188,7 +189,13 @@ function NavItem({
       <span className={cn(compact ? 'text-[14px]' : 'text-[13px]', active ? 'font-semibold' : 'font-medium')}>
         {label}
       </span>
-      {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#C84B31]" />}
+      {badge ? (
+        <span className="ml-auto min-w-[18px] h-4 bg-[#C84B31] rounded-full flex items-center justify-center text-[9px] font-bold text-white px-1">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      ) : active ? (
+        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#C84B31]" />
+      ) : null}
     </button>
   );
 }
@@ -212,14 +219,46 @@ export default function AdminLayout({
   const [bellOpen, setBellOpen]             = useState(false);
   const [notifications, setNotifications]   = useState<Notification[]>([]);
   const [notifLoading, setNotifLoading]     = useState(false);
+  const [pendingCount, setPendingCount]     = useState(0);
   const bellRef = useRef<HTMLDivElement>(null);
+
+  // ── Notification read-state via localStorage ─────────────────────────────
+  const getSeenIds = (): string[] => {
+    try { return JSON.parse(localStorage.getItem('admin_seen_notifs') ?? '[]'); }
+    catch { return []; }
+  };
+  const markAllSeen = (notifs: Notification[]) => {
+    try {
+      const ids = notifs.map((n) => n.id);
+      localStorage.setItem('admin_seen_notifs', JSON.stringify(ids));
+    } catch {}
+  };
+  const countUnread = (notifs: Notification[]) => {
+    const seen = new Set(getSeenIds());
+    return notifs.filter((n) => !seen.has(n.id)).length;
+  };
+
+  // Fetch on mount — only badge unseen notifications
+  useEffect(() => {
+    adminAPI.getNotifications()
+      .then(({ data }) => {
+        setNotifications(data);
+        setPendingCount(countUnread(data));
+      })
+      .catch(() => {});
+  }, []);
 
   const openBell = () => {
     setBellOpen((prev) => {
       if (!prev) {
         setNotifLoading(true);
         adminAPI.getNotifications()
-          .then(({ data }) => setNotifications(data))
+          .then(({ data }) => {
+            setNotifications(data);
+            // Mark all as seen immediately when panel opens
+            markAllSeen(data);
+            setPendingCount(0);
+          })
           .catch(() => setNotifications([]))
           .finally(() => setNotifLoading(false));
       }
@@ -328,6 +367,7 @@ export default function AdminLayout({
                   active={isActive(href)}
                   onClick={() => navigate(href)}
                   compact={compact}
+                  badge={undefined}
                 />
               ))}
             </div>
@@ -385,11 +425,10 @@ export default function AdminLayout({
                   className="relative w-9 h-9 rounded-full bg-[#F5F4F2] border border-[#EBEBEB] flex items-center justify-center text-[#6B7280] hover:bg-[#EBEBEB] transition-colors"
                 >
                   <Bell className="w-4 h-4" />
-                  {notifications.length > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-white" />
-                  )}
-                  {notifications.length === 0 && !bellOpen && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-white" />
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-[#C84B31] rounded-full border border-white flex items-center justify-center text-[9px] font-bold text-white px-0.5">
+                      {pendingCount > 9 ? '9+' : pendingCount}
+                    </span>
                   )}
                 </button>
                 {bellOpen && (
@@ -435,7 +474,11 @@ export default function AdminLayout({
                   className="relative w-9 h-9 rounded-full bg-white/8 flex items-center justify-center text-[#9CA3AF]"
                 >
                   <Bell className="w-4 h-4" />
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#C84B31] rounded-full border border-[#1C1917]" />
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-[#C84B31] rounded-full border border-[#1C1917] flex items-center justify-center text-[9px] font-bold text-white px-0.5">
+                      {pendingCount > 9 ? '9+' : pendingCount}
+                    </span>
+                  )}
                 </button>
                 {bellOpen && (
                   <div className="fixed left-4 right-4 top-16 z-50">

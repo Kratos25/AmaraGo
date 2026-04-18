@@ -14,7 +14,7 @@ export interface UserProfile {
   name: string;
   email?: string;
   phone?: string;
-  role: 'client' | 'service_provider' | 'admin';
+  role: 'client' | 'service_provider' | 'pending_sp' | 'admin';
   profile_image?: string;
   created_at?: string;
 }
@@ -85,6 +85,20 @@ export interface Address {
 
 export type BookingStatus = 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled';
 
+export interface ReviewDetail {
+  rating: number;
+  comment?: string;
+  created_at?: string;
+}
+
+export interface BookingItem {
+  service_id?: string;
+  package_id?: string;
+  name: string;
+  unit_price: number;
+  quantity: number;
+}
+
 export interface Booking {
   id: string;
   client_id: string;
@@ -107,6 +121,10 @@ export interface Booking {
   client_name?: string;
   provider_name?: string;
   client_phone?: string;
+  client_review?: ReviewDetail;
+  provider_review?: ReviewDetail;
+  booking_ref?: string;
+  items?: BookingItem[];
 }
 
 export interface Certification {
@@ -118,6 +136,12 @@ export interface Certification {
 export interface PortfolioItem {
   image_url: string;
   caption?: string;
+}
+
+export interface ProviderDocuments {
+  aadhar_url?: string;
+  pan_url?: string;
+  certification_docs?: string[];
 }
 
 export interface ProviderProfile {
@@ -138,6 +162,7 @@ export interface ProviderProfile {
   is_approved: boolean;
   commission_rate: number;
   created_at?: string;
+  documents?: ProviderDocuments;
 }
 
 export interface EarningTransaction {
@@ -186,6 +211,15 @@ export interface Notification {
   created_at?: string;
 }
 
+export interface ProviderNotification {
+  id: string;
+  type: 'new_booking' | 'new_rating' | 'booking_cancelled';
+  title: string;
+  message: string;
+  reference_id: string;
+  created_at?: string;
+}
+
 export interface ValidateCouponResponse {
   valid: boolean;
   discount_amount: number;
@@ -206,7 +240,7 @@ export const authAPI = {
     firebase_uid: string; id_token: string;
     bio?: string; experience_years?: number;
     services_offered?: string[]; location?: string;
-  }) => api.post<{ uid: string; role: string; message: string }>('/auth/register/provider', data),
+  }) => api.post<{ uid: string; role: string; message: string; is_approved?: boolean }>('/auth/register/provider', data),
 
   me: () => api.get<UserProfile>('/auth/me'),
 };
@@ -335,6 +369,34 @@ export const bookingsAPI = {
     api.put<Booking>(`/bookings/${bookingId}/status`, { status }),
 
   cancel: (bookingId: string) => api.delete(`/bookings/${bookingId}`),
+
+  /** Client rates the provider + service after job completion (1-5 stars). */
+  submitProviderReview: (bookingId: string, data: { rating: number; comment?: string }) =>
+    api.post<Booking>(`/bookings/${bookingId}/review`, data),
+
+  /** Provider rates the client after job completion (1-5 stars). */
+  rateClient: (bookingId: string, data: { rating: number; comment?: string }) =>
+    api.post<Booking>(`/bookings/${bookingId}/rate-client`, data),
+
+  /** Create one booking from multiple cart items (returns booking_ref like AG0001). */
+  createMulti: (data: {
+    items: Array<{ service_id?: string; package_id?: string; name: string; unit_price: number; quantity: number }>;
+    date: string;
+    time: string;
+    address_id?: string;
+    address_text?: string;
+    payment_method: 'upi' | 'card' | 'wallet' | 'cash';
+    coupon_code?: string;
+    notes?: string;
+  }) => api.post<Booking>('/bookings/multi', data),
+
+  /** Edit a pending booking's date/time/address/notes. */
+  update: (bookingId: string, data: {
+    date?: string;
+    time?: string;
+    address_text?: string;
+    notes?: string;
+  }) => api.put<Booking>(`/bookings/${bookingId}`, data),
 };
 
 // ─── Providers ────────────────────────────────────────────────────────────────
@@ -343,21 +405,43 @@ export const providersAPI = {
   getMyProfile: () => api.get<ProviderProfile>('/providers/me'),
 
   updateMyProfile: (data: Partial<{
+    name: string;
+    phone: string;
+    profile_image: string;
     bio: string;
     experience_years: number;
     services_offered: string[];
     location: string;
     certifications: Certification[];
     portfolio: PortfolioItem[];
+    documents: ProviderDocuments;
   }>) => api.put<ProviderProfile>('/providers/me', data),
 
   toggleOnline: (is_online: boolean) =>
-    api.put<{ is_online: boolean }>('/providers/me/online', { is_online }),
+    api.put<ProviderProfile>('/providers/me/online', { is_online }),
+
+  /** Upload a file via backend (bypasses Firebase Storage Rules). Returns { url } */
+  uploadFile: (file: File, path: string, onProgress?: (pct: number) => void) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<{ url: string }>(
+      `/providers/me/upload?path=${encodeURIComponent(path)}`,
+      form,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: onProgress
+          ? (e) => { if (e.total) onProgress(Math.round((e.loaded / e.total) * 100)); }
+          : undefined,
+      },
+    );
+  },
 
   getMyJobs: (params?: { status?: string }) =>
     api.get<Booking[]>('/providers/me/jobs', { params }),
 
   getMyEarnings: () => api.get<EarningsSummary>('/providers/me/earnings'),
+
+  getMyNotifications: () => api.get<ProviderNotification[]>('/providers/me/notifications'),
 
   // Admin
   list: (params?: { approved?: boolean }) =>
@@ -371,9 +455,27 @@ export const providersAPI = {
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
+export interface ClientStats {
+  uid: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  profile_image?: string;
+  created_at?: string;
+  total_bookings: number;
+  completed_bookings: number;
+  cancelled_bookings: number;
+  total_spend: number;
+  avg_booking_value: number;
+  favorite_service?: string;
+  last_booking_date?: string;
+  is_vip: boolean;
+}
+
 export const adminAPI = {
   getDashboard: () => api.get<DashboardStats>('/admin/dashboard'),
   listClients: () => api.get<UserProfile[]>('/admin/clients'),
+  listClientsStats: () => api.get<ClientStats[]>('/admin/clients-stats'),
   getClient: (uid: string) => api.get<UserProfile>(`/admin/clients/${uid}`),
   getClientBookings: (uid: string) => api.get<Booking[]>(`/admin/clients/${uid}/bookings`),
   getNotifications: () => api.get<Notification[]>('/admin/notifications'),

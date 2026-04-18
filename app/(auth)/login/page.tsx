@@ -337,7 +337,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -368,7 +368,7 @@ async function getRedirectPath(user: User): Promise<string> {
     if (snap.exists()) {
       const role = snap.data()?.role;
       if (role === "admin") return "/admin";
-      if (role === "service_provider") return "/provider";
+      if (role === "service_provider" || role === "pending_sp") return "/provider";
     }
   } catch {
     // fallback to client if Firestore fails
@@ -403,6 +403,8 @@ export default function AuthPage() {
 
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect') ?? null;
 
   // ── SINGLE unified auth effect ──────────────────────────────────────────────
   useEffect(() => {
@@ -417,7 +419,7 @@ export default function AuthPage() {
           // cookie may already be valid
         }
         const path = await getRedirectPath(user);
-        router.replace(path);
+        router.replace(redirectTo ?? path);
       } else {
         setAuthChecking(false);
       }
@@ -435,7 +437,7 @@ export default function AuthPage() {
       await setSessionCookie(token);
       toast({ title: 'Welcome back!', description: 'You have successfully logged in.' });
       const path = await getRedirectPath(user);
-      router.replace(path);
+      router.replace(redirectTo ?? path);
     } catch (error: any) {
       setFormError(friendlyError(error.code));
     } finally {
