@@ -22,7 +22,7 @@ const EMPTY_DRAFT = {
   code: '', description: '', type: 'percentage' as 'percentage' | 'flat',
   value: '', minOrder: '', maxDiscount: '',
   usageLimit: '', validFrom: '', validTo: '',
-  applicableFor: 'all' as Coupon['applicableFor'],
+  applicable_for: 'all' as Coupon['applicable_for'],
   autoApply: false,
 };
 
@@ -68,10 +68,10 @@ export default function OffersTab() {
         min_order:       parseFloat(draft.minOrder) || 0,
         max_discount:    draft.maxDiscount ? parseFloat(draft.maxDiscount) : undefined,
         usage_limit:     parseInt(draft.usageLimit),
-        used_count:      0,
+        // used_count:      0,
         valid_from:      draft.validFrom,
         valid_to:        draft.validTo,
-        applicable_for:  draft.applicableFor,
+        applicable_for:  draft.applicable_for,
         auto_apply:      draft.autoApply,
         active:          true,
       });
@@ -172,7 +172,7 @@ export default function OffersTab() {
               <InlineInput label="Total Usage Limit *" value={draft.usageLimit} onChange={(v) => set({ usageLimit: v })} type="number" placeholder="e.g. 1000" />
               <InlineDateInput label="Valid From *" value={draft.validFrom} onChange={(v) => set({ validFrom: v })}  min={TODAY} />
               <InlineDateInput label="Valid To *"   value={draft.validTo}   onChange={(v) => set({ validTo: v })}    min={draft.validFrom || TODAY} />
-              <InlineSelect label="Applicable For" value={draft.applicableFor} onChange={(v) => set({ applicableFor: v as any })} options={APPLICABLE_OPTIONS} />
+              <InlineSelect label="Applicable For" value={draft.applicable_for} onChange={(v) => set({ applicable_for: v as any })} options={APPLICABLE_OPTIONS} />
             </div>
             <label className="flex items-center gap-2.5 mb-4 cursor-pointer">
               <input

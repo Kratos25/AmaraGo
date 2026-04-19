@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
 import AdminLayout from '../_components/AdminLayout';
 import { providersAPI, type ProviderProfile } from '@/lib/api';
+import { Suspense } from 'react';
 
 // ─── Design tokens ─────────────────────────────────────────────────────────
 // Primary #C84B31  Tint #FFF0EC/#FDDDD5  Page #F5F4F2
@@ -279,7 +280,7 @@ function EmptyState({ icon, label, sub }: { icon: string; label: string; sub: st
 
 import { exportToExcel } from '@/lib/exportExcel';
 
-export default function AdminServiceProviders() {
+function AdminServiceProviders() {
   const router       = useRouter();
   const searchParams  = useSearchParams();
   const { toast }    = useToast();
@@ -579,4 +580,12 @@ export default function AdminServiceProviders() {
 
     </AdminLayout>
   );
+}
+
+export default function AdminService() {
+  return (
+    <Suspense fallback={null}>
+      <AdminServiceProviders />
+    </Suspense>
+  )
 }

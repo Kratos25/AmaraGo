@@ -9,6 +9,7 @@ import CategoriesTab from './_components/CategoriesTab';
 import ServicesTab   from './_components/ServicesTab';
 import PackagesTab   from './_components/PackagesTab';
 import OffersTab     from './_components/OffersTab';
+import { Suspense } from 'react';
 
 type TabKey = 'services' | 'packages' | 'categories' | 'offers';
 
@@ -19,7 +20,7 @@ const TABS = [
   { key: 'offers'     as TabKey, label: 'Offers & Coupons', Icon: Ticket     },
 ];
 
-export default function AdminServices() {
+function AdminServicesInner() {
   const searchParams = useSearchParams();
   const tabParam     = searchParams.get('tab') as TabKey | null;
   const openAdd      = searchParams.get('openAdd') === 'true';
@@ -57,5 +58,14 @@ export default function AdminServices() {
       {activeTab === 'categories' && <CategoriesTab />}
       {activeTab === 'offers'     && <OffersTab />}
     </AdminLayout>
+  );
+}
+
+
+export default function AdminServices() {
+  return (
+    <Suspense fallback={null}>
+      <AdminServicesInner />
+    </Suspense>
   );
 }

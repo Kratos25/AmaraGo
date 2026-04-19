@@ -14,6 +14,7 @@ import { bookingsAPI, addressesAPI, couponsAPI } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { Suspense } from "react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ function StepDots({ current, total }: { current: number; total: number }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function CheckoutPage() {
+function CheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -607,4 +608,12 @@ export default function CheckoutPage() {
       </div>
     </div>
   );
+}
+
+export default function checkout() {
+  return (
+    <Suspense fallback={null}>
+      <CheckoutPage />
+    </Suspense>
+  )
 }

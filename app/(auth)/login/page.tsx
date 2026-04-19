@@ -358,6 +358,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import Logo from '@/public/Amara_Logo.png';
 import { LoginLeftPanel } from '@/components/ui/LoginLeftPanel';
 import { FcGoogle } from "react-icons/fc";
+import { Suspense } from 'react';
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "admin@amarago.com";
 
@@ -388,7 +389,7 @@ async function setSessionCookie(token: string): Promise<void> {
   }
 }
 
-export default function AuthPage() {
+function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -796,4 +797,12 @@ function friendlyError(code: string): string {
     'auth/popup-blocked':          'Popup was blocked. Please allow popups for this site.',
   };
   return map[code] ?? 'Something went wrong. Please try again.';
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={null}>
+            <AuthPage />
+        </Suspense>
+    );
 }
