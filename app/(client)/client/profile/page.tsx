@@ -7,7 +7,7 @@ import { useAuth } from '@/config/context/AuthContext';
 import {
   User, Edit3, Camera, Star, Award, ChevronRight,
   Bell, Shield, HelpCircle, LogOut, MapPin, Plus, Trash2,
-  Gift, Sparkles, Check, X, Heart,
+  Gift, Sparkles, Check, X, Heart, FileText, ShieldCheck,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -21,6 +21,7 @@ type MenuItemType = {
   badge?: string;
   danger?: boolean;
   isToggle?: boolean;
+  href?: string;
   action?: () => void;
 };
 
@@ -162,8 +163,10 @@ export default function Profile() {
     {
       title: 'Support',
       items: [
-        { icon: <HelpCircle size={17} />, label: 'Help & Support', sub: 'Chat, call, FAQs'    },
-        { icon: <Star size={17} />,        label: 'Rate the App',   sub: 'Share your feedback' },
+        { icon: <HelpCircle size={17} />, label: 'Help & Support',      sub: 'Chat, call, FAQs'      },
+        { icon: <Star size={17} />,        label: 'Rate the App',        sub: 'Share your feedback'   },
+        { icon: <FileText size={17} />,    label: 'Terms & Conditions',  sub: 'Usage terms',          href: '/client/terms'   },
+        { icon: <ShieldCheck size={17} />, label: 'Privacy Policy',      sub: 'How we use your data', href: '/client/privacy' },
       ],
     },
     {
@@ -370,6 +373,22 @@ export default function Profile() {
             )}
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
               {section.items.map((item, ii) => (
+                item.href ? (
+                <button
+                  key={ii}
+                  onClick={() => router.push(item.href!)}
+                  className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-gray-50 ${ii > 0 ? 'border-t border-gray-50' : ''}`}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-[#fff5f7] text-[#e5849c]">
+                    {item.icon}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-[#111827]">{item.label}</p>
+                    {item.sub && <p className="text-xs text-gray-400 mt-0.5">{item.sub}</p>}
+                  </div>
+                  <ChevronRight size={15} className="text-gray-300" />
+                </button>
+                ) : (
                 <button
                   key={ii}
                   onClick={item.action}
@@ -392,6 +411,7 @@ export default function Profile() {
                     <ChevronRight size={15} className="text-gray-300" />
                   ) : null}
                 </button>
+                ))}
               ))}
             </div>
           </div>

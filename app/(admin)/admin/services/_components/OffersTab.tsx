@@ -68,7 +68,6 @@ export default function OffersTab() {
         min_order:       parseFloat(draft.minOrder) || 0,
         max_discount:    draft.maxDiscount ? parseFloat(draft.maxDiscount) : undefined,
         usage_limit:     parseInt(draft.usageLimit),
-        // used_count:      0,
         valid_from:      draft.validFrom,
         valid_to:        draft.validTo,
         applicable_for:  draft.applicable_for,
