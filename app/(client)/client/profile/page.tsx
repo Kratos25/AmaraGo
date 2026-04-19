@@ -411,7 +411,7 @@ export default function Profile() {
                     <ChevronRight size={15} className="text-gray-300" />
                   ) : null}
                 </button>
-                ))}
+                )
               ))}
             </div>
           </div>
