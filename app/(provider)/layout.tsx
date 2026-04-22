@@ -5,6 +5,8 @@
 // page can pass its own title, subtitle, and topBarRight slot.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const dynamic = "force-dynamic";
+
 export default function ProviderRootLayout({ children }: { children: React.ReactNode }) {
   // Add your auth guard logic here, e.g. redirect if no session
   return <>{children}</>;

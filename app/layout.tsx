@@ -2,6 +2,8 @@ import "./globals.css";
 import { AuthProvider } from "@/config/context/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "AmaraGo",
   description: "Premium beauty & wellness at your doorstep",

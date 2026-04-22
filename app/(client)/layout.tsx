@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { ClientLayout } from "./client/_components/ClientLayout";
 import { CartProvider } from "@/config/context/CartContext";
 

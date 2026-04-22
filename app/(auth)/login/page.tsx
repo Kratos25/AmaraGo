@@ -716,6 +716,16 @@ function AuthPage() {
             )}
           </div>
 
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => router.push('/client/home')}
+              className="text-sm text-gray-400 hover:text-gray-600 underline underline-offset-2 transition-colors"
+            >
+              Browse as guest
+            </button>
+          </div>
+
         </div>
       </div>
     </div>

@@ -1,0 +1,10 @@
+# Cloud Build ignore file — separate from .gitignore
+# .env.production MUST be included (contains NEXT_PUBLIC_* vars for build)
+.next/
+node_modules/
+.env
+.env.local
+.env.development.local
+.env.test.local
+*.log
+.git/
