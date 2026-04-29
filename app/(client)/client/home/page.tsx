@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Search, Tag, Clock, Star, MapPin, Bell, X, Check, ChevronRight, Loader2, Copy, CheckCheck } from 'lucide-react';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,7 @@ import { auth, db } from '@/lib/firebase';
 import { authAPI, couponsAPI, categoriesAPI, packagesAPI, servicesAPI } from '@/lib/api';
 import { useCart } from '@/config/context/CartContext';
 import { CartQtyButton } from '@/components/client/CartQtyButton';
+import { PackageCard } from '@/components/client/PackageCard';
 import {
   BannerSkeleton,
   CategoryRowSkeleton,
@@ -216,7 +218,7 @@ export default function Home() {
   // Categories, packages, popular services from API
   const [categories, setCategories] = useState<{ name: string; icon: string }[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [packages, setPackages] = useState<{ id: string; name: string; desc: string; time: string; price: string }[]>([]);
+  const [packages, setPackages] = useState<{ id: string; name: string; desc: string; time: string; price: string; imageUrl?: string; badge?: string; originalPrice?: number }[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
   const [popularServices, setPopularServices] = useState<{ id: string; name: string; duration: string; rating: number; discountedPrice: string; originalPrice: string; discount: string }[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
@@ -235,6 +237,9 @@ export default function Home() {
           desc: p.tagline ?? '',
           time: p.duration ?? '',
           price: `₹${p.price.toLocaleString('en-IN')}`,
+          imageUrl: p.image_url,
+          badge: p.badge,
+          originalPrice: p.original_price,
         }))
       ))
       .catch(() => {});
@@ -615,32 +620,7 @@ export default function Home() {
             <SectionHeader title="Special Packages" action={{ label: 'View all', href: '/client/services' }} />
             <div className="flex gap-5 overflow-x-auto pb-3 scrollbar-none -mx-4 px-4 md:mx-0 md:px-0">
               {packages.map((pkg) => (
-                <div
-                  key={pkg.id}
-                  className="flex-shrink-0 w-64 md:w-72 rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden"
-                >
-                  {/* Illustration band */}
-                  <div className="h-36 bg-[#111827] flex items-center justify-center relative overflow-hidden">
-                    <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_70%_30%,#e5849c,transparent_60%)]" />
-                    <span className="text-5xl">{pkg.name.includes('Bridal') ? '👰' : pkg.name.includes('Hair') ? '💇' : pkg.name.includes('Spa') ? '🧖' : '✨'}</span>
-                  </div>
-                  <div className="p-5">
-                    <h4 className="font-bold text-base text-[#111827] mb-1 leading-tight">{pkg.name}</h4>
-                    <p className="text-gray-500 text-xs mb-4 leading-relaxed line-clamp-2">{pkg.desc}</p>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        {pkg.time && <p className="text-[10px] text-gray-400 mb-0.5 flex items-center gap-1"><Clock size={10} />{pkg.time}</p>}
-                        <p className="text-xl font-extrabold text-[#e5849c]">{pkg.price}</p>
-                      </div>
-                      <CartQtyButton
-                        packageId={pkg.id}
-                        name={pkg.name}
-                        price={parseFloat(pkg.price.replace(/[^0-9.]/g, ''))}
-                        duration={pkg.time}
-                      />
-                    </div>
-                  </div>
-                </div>
+                <PackageCard key={pkg.id} pkg={pkg} />
               ))}
             </div>
           </section>

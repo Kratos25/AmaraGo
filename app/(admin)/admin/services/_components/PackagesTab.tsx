@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit3, Trash2, Check, X, Star } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
+import { Plus, Edit3, Trash2, Check, X, Star, ImagePlus, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
@@ -18,6 +19,10 @@ export default function PackagesTab() {
     name: '', tagline: '', duration: '',
     originalPrice: '', price: '', badge: '', servicesRaw: '',
   });
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     packagesAPI.listAll()
@@ -26,7 +31,18 @@ export default function PackagesTab() {
       .finally(() => setLoading(false));
   }, []);
 
-  const resetDraft = () => setDraft({ name: '', tagline: '', duration: '', originalPrice: '', price: '', badge: '', servicesRaw: '' });
+  const resetDraft = () => {
+    setDraft({ name: '', tagline: '', duration: '', originalPrice: '', price: '', badge: '', servicesRaw: '' });
+    setPendingImage(null);
+    setImagePreview(null);
+  };
+
+  const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPendingImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
 
   const handleSave = async () => {
     if (!draft.name.trim()) return;
@@ -39,7 +55,14 @@ export default function PackagesTab() {
           name: draft.name, tagline: draft.tagline, duration: draft.duration,
           original_price, price, services, badge: draft.badge || undefined,
         });
-        setPackages((p) => p.map((x) => x.id === editId ? data : x));
+        let imageUrl = data.image_url;
+        if (pendingImage) {
+          setUploadingId(editId);
+          const { data: imgData } = await packagesAPI.uploadThumbnail(editId, pendingImage);
+          imageUrl = imgData.url;
+          setUploadingId(null);
+        }
+        setPackages((p) => p.map((x) => x.id === editId ? { ...data, image_url: imageUrl } : x));
         toast({ title: 'Package updated' });
         setEditId(null);
       } else {
@@ -47,11 +70,19 @@ export default function PackagesTab() {
           name: draft.name, tagline: draft.tagline, duration: draft.duration,
           original_price, price, services, badge: draft.badge || undefined, active: true,
         } as any);
-        setPackages((p) => [...p, data]);
+        let imageUrl: string | undefined;
+        if (pendingImage) {
+          setUploadingId(data.id);
+          const { data: imgData } = await packagesAPI.uploadThumbnail(data.id, pendingImage);
+          imageUrl = imgData.url;
+          setUploadingId(null);
+        }
+        setPackages((p) => [...p, { ...data, image_url: imageUrl }]);
         toast({ title: 'Package added ✓' });
         setAdding(false);
       }
     } catch {
+      setUploadingId(null);
       toast({ title: 'Failed to save package', variant: 'destructive' });
     }
     resetDraft();
@@ -64,6 +95,8 @@ export default function PackagesTab() {
       badge: pkg.badge ?? '',
       servicesRaw: pkg.services.join(', '),
     });
+    setPendingImage(null);
+    setImagePreview(pkg.image_url ?? null);
     setEditId(pkg.id);
     setAdding(false);
   };
@@ -106,10 +139,40 @@ export default function PackagesTab() {
               <InlineInput label="Original Price (₹)" value={draft.originalPrice} onChange={(v) => setDraft((p) => ({ ...p, originalPrice: v }))} placeholder="e.g. 15000" type="number" />
               <InlineInput label="Offer Price (₹)"  value={draft.price}         onChange={(v) => setDraft((p) => ({ ...p, price: v }))}         placeholder="e.g. 12999" type="number" />
             </div>
-            <InlineInput label="Included Services (comma-separated)" value={draft.servicesRaw} onChange={(v) => setDraft((p) => ({ ...p, servicesRaw: v }))} placeholder="Bridal Makeup, Hair Spa, Gold Facial" className="mb-4" />
+            <InlineInput label="Included Services (comma-separated)" value={draft.servicesRaw} onChange={(v) => setDraft((p) => ({ ...p, servicesRaw: v }))} placeholder="Bridal Makeup, Hair Spa, Gold Facial" className="mb-3" />
+
+            {/* Thumbnail upload */}
+            <div className="mb-4">
+              <p className="text-[11px] font-semibold text-[#6B7280] mb-1.5">Thumbnail Image</p>
+              <div className="flex items-center gap-3">
+                {imagePreview ? (
+                  <div className="relative w-20 h-14 rounded-lg overflow-hidden border border-[#EBEBEB] shrink-0">
+                    <Image src={imagePreview} alt="preview" fill className="object-cover" unoptimized={imagePreview.startsWith('blob:')} />
+                    <button
+                      type="button"
+                      onClick={() => { setPendingImage(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                      className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 rounded-full flex items-center justify-center text-white"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-14 rounded-lg border-2 border-dashed border-[#FDDDD5] bg-[#FFF8F6] flex items-center justify-center shrink-0">
+                    <ImagePlus className="w-5 h-5 text-[#C84B31]/40" />
+                  </div>
+                )}
+                <div>
+                  <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImagePick} className="hidden" id="pkg-img-input" />
+                  <label htmlFor="pkg-img-input" className="cursor-pointer inline-flex items-center gap-1.5 h-8 px-3 bg-white border border-[#EBEBEB] text-[#6B7280] text-[11px] font-semibold rounded-lg hover:bg-[#F5F4F2] transition-colors">
+                    <ImagePlus className="w-3.5 h-3.5" /> {imagePreview ? 'Change image' : 'Upload image'}
+                  </label>
+                  <p className="text-[10px] text-[#9CA3AF] mt-1">JPEG, PNG or WebP · max 5 MB</p>
+                </div>
+              </div>
+            </div>
             <div className="flex gap-2">
-              <button onClick={handleSave} className="flex items-center gap-1.5 h-9 px-4 bg-[#C84B31] hover:bg-[#B04028] text-white text-[12px] font-semibold rounded-xl transition-colors">
-                <Check className="w-3.5 h-3.5" /> {editId ? 'Update' : 'Add Package'}
+              <button onClick={handleSave} disabled={!!uploadingId} className="flex items-center gap-1.5 h-9 px-4 bg-[#C84B31] hover:bg-[#B04028] disabled:opacity-60 text-white text-[12px] font-semibold rounded-xl transition-colors">
+                {uploadingId ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</> : <><Check className="w-3.5 h-3.5" /> {editId ? 'Update' : 'Add Package'}</>}
               </button>
               <button onClick={() => { setAdding(false); setEditId(null); resetDraft(); }} className="flex items-center gap-1.5 h-9 px-4 bg-white border border-[#EBEBEB] text-[#6B7280] text-[12px] font-semibold rounded-xl hover:bg-[#F5F4F2] transition-colors">
                 <X className="w-3.5 h-3.5" /> Cancel
@@ -131,7 +194,17 @@ export default function PackagesTab() {
           </button>
         )}
         {packages.map((pkg) => (
-          <Card key={pkg.id} className={cn('border shadow-none transition-all', pkg.active ? 'border-[#EBEBEB] bg-white' : 'border-[#EBEBEB] bg-[#F5F4F2] opacity-70')}>
+          <Card key={pkg.id} className={cn('border shadow-none transition-all overflow-hidden', pkg.active ? 'border-[#EBEBEB] bg-white' : 'border-[#EBEBEB] bg-[#F5F4F2] opacity-70')}>
+            {pkg.image_url && (
+              <div className="relative w-full h-36">
+                <Image src={pkg.image_url} alt={pkg.name} fill className="object-cover" />
+                {uploadingId === pkg.id && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                  </div>
+                )}
+              </div>
+            )}
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="flex-1 min-w-0">

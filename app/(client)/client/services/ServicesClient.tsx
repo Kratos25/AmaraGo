@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Clock, Star, X, Heart, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { categoriesAPI, servicesAPI } from '@/lib/api';
@@ -15,6 +16,7 @@ interface ServiceItem {
   rating: number;
   discountedPrice: number;
   originalPrice: number;
+  imageUrl?: string;
 }
 
 interface Filters {
@@ -80,6 +82,7 @@ export default function Services() {
           rating: s.rating ?? 0,
           discountedPrice: s.discounted_price ?? s.base_price,
           originalPrice: s.base_price,
+          imageUrl: s.image_url,
         })));
       })
       .catch(() => {})
@@ -247,8 +250,14 @@ export default function Services() {
                 >
                   {/* Card top band */}
                   <div className="relative h-36 bg-[#111827] flex items-center justify-center overflow-hidden">
-                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_60%_40%,#e5849c,transparent_65%)]" />
-                    <span className="text-5xl">{getEmoji(service.name)}</span>
+                    {service.imageUrl ? (
+                      <Image src={service.imageUrl} alt={service.name} fill className="object-cover" />
+                    ) : (
+                      <>
+                        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_60%_40%,#e5849c,transparent_65%)]" />
+                        <span className="text-5xl">{getEmoji(service.name)}</span>
+                      </>
+                    )}
 
                     {discount > 0 && (
                       <span className="absolute top-3 left-3 bg-[#e5849c] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">

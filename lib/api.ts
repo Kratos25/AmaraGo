@@ -40,6 +40,7 @@ export interface Service {
   popular: boolean;
   rating: number;
   total_bookings: number;
+  image_url?: string;
 }
 
 export interface Package {
@@ -55,6 +56,7 @@ export interface Package {
   badge?: string;
   rating: number;
   total_bookings: number;
+  image_url?: string;
 }
 
 export interface Coupon {
@@ -289,6 +291,14 @@ export const servicesAPI = {
     api.put<Service>(`/services/${id}`, data),
 
   delete: (id: string) => api.delete(`/services/${id}`),
+
+  uploadThumbnail: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<{ url: string }>(`/services/${id}/thumbnail`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 // ─── Packages ─────────────────────────────────────────────────────────────────
@@ -307,6 +317,14 @@ export const packagesAPI = {
     api.put<Package>(`/packages/${id}`, data),
 
   delete: (id: string) => api.delete(`/packages/${id}`),
+
+  uploadThumbnail: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<{ url: string }>(`/packages/${id}/thumbnail`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 // ─── Coupons ──────────────────────────────────────────────────────────────────

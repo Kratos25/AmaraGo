@@ -12,7 +12,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-PROJECT_ID="amara-go"
+PROJECT_ID="amarago-1173a"
 REGION="asia-south1"
 SERVICE_NAME="amarago-frontend"
 REPO="asia-south1-docker.pkg.dev/${PROJECT_ID}/amarago"
@@ -45,6 +45,9 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$(get_env NEXT_PUBLIC_FIREBASE_STORAGE_BUCKE
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$(get_env NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
 NEXT_PUBLIC_FIREBASE_APP_ID=$(get_env NEXT_PUBLIC_FIREBASE_APP_ID)
 NEXT_PUBLIC_ADMIN_EMAIL=$(get_env NEXT_PUBLIC_ADMIN_EMAIL)
+FIREBASE_PROJECT_ID=$(get_env FIREBASE_PROJECT_ID)
+FIREBASE_CLIENT_EMAIL=$(get_env FIREBASE_CLIENT_EMAIL)
+FIREBASE_PRIVATE_KEY=$(get_env FIREBASE_PRIVATE_KEY)
 
 # ── Write .env.production so Next.js bakes NEXT_PUBLIC_* into the bundle ──────
 cat > .env.production << ENVEOF
@@ -77,6 +80,36 @@ echo "Pushing image…"
 docker push "$IMAGE"
 echo "✓ Push complete"
 
+# ── Write env-vars YAML (handles FIREBASE_PRIVATE_KEY newlines safely) ────────
+ENV_VARS_FILE=$(mktemp /tmp/cloudrun-frontend-env-XXXXXX.yaml)
+trap 'rm -f "$ENV_VARS_FILE"' EXIT
+
+python3 - <<PYEOF
+def yq(s): return "'" + str(s).replace("'", "''") + "'"
+
+import os
+pk = open('/Users/amara product/frontend/AmaraGo/.env').read()
+private_key = ""
+for line in pk.splitlines():
+    if line.startswith("FIREBASE_PRIVATE_KEY="):
+        private_key = line[len("FIREBASE_PRIVATE_KEY="):].strip().strip('"')
+        break
+
+with open('$ENV_VARS_FILE', 'w') as f:
+    f.write(f'NODE_ENV: {yq("production")}\n')
+    f.write(f'NEXT_PUBLIC_API_URL: {yq("${BACKEND_URL}")}\n')
+    f.write(f'NEXT_PUBLIC_ADMIN_EMAIL: {yq("${NEXT_PUBLIC_ADMIN_EMAIL}")}\n')
+    f.write(f'NEXT_PUBLIC_FIREBASE_API_KEY: {yq("${NEXT_PUBLIC_FIREBASE_API_KEY}")}\n')
+    f.write(f'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: {yq("${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}")}\n')
+    f.write(f'NEXT_PUBLIC_FIREBASE_PROJECT_ID: {yq("${NEXT_PUBLIC_FIREBASE_PROJECT_ID}")}\n')
+    f.write(f'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: {yq("${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}")}\n')
+    f.write(f'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: {yq("${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}")}\n')
+    f.write(f'NEXT_PUBLIC_FIREBASE_APP_ID: {yq("${NEXT_PUBLIC_FIREBASE_APP_ID}")}\n')
+    f.write(f'FIREBASE_PROJECT_ID: {yq("${FIREBASE_PROJECT_ID}")}\n')
+    f.write(f'FIREBASE_CLIENT_EMAIL: {yq("${FIREBASE_CLIENT_EMAIL}")}\n')
+    f.write(f'FIREBASE_PRIVATE_KEY: {yq(private_key)}\n')
+PYEOF
+
 # ── Deploy to Cloud Run ───────────────────────────────────────────────────────
 echo ""
 echo "Deploying $SERVICE_NAME to Cloud Run ($REGION) …"
@@ -92,7 +125,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --cpu 1 \
   --min-instances 0 \
   --max-instances 10 \
-  --set-env-vars "NODE_ENV=production,NEXT_PUBLIC_API_URL=${BACKEND_URL},NEXT_PUBLIC_ADMIN_EMAIL=${NEXT_PUBLIC_ADMIN_EMAIL},NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY},NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN},NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID},NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET},NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID},NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}"
+  --env-vars-file "$ENV_VARS_FILE"
 
 echo ""
 echo "✅ Frontend deployed!"

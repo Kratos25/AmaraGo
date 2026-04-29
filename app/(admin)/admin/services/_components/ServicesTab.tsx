@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, Plus, Edit3, Trash2, Check, X, Star } from 'lucide-react';
+import Image from 'next/image';
+import { Search, Plus, Edit3, Trash2, Check, X, Star, ImagePlus, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/lib/utils';
@@ -15,8 +16,8 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 
 export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boolean }) {
   const { toast } = useToast();
-  const [allCategories, setAllCategories]   = useState<Category[]>([]);   // all, for filters
-  const [activeCategories, setActiveCategories] = useState<Category[]>([]); // active only, for form
+  const [allCategories, setAllCategories]   = useState<Category[]>([]);
+  const [activeCategories, setActiveCategories] = useState<Category[]>([]);
   const [services, setServices]             = useState<Service[]>([]);
   const [search, setSearch]                 = useState('');
   const [catFilter, setCatFilter]           = useState('all');
@@ -27,6 +28,10 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
     name: '', categoryId: '', duration: '',
     basePrice: '', discountedPrice: '', description: '',
   });
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,7 +57,7 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
         id: s.id, name: s.name, categoryId: s.category_id,
         duration: s.duration, basePrice: s.base_price, discountedPrice: s.discounted_price,
         description: s.description, active: s.active, popular: s.popular,
-        rating: s.rating, bookings: s.total_bookings,
+        rating: s.rating, bookings: s.total_bookings, imageUrl: s.image_url,
       }))))
       .catch(() => {});
   }, []);
@@ -66,7 +71,18 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
     }
   }, [autoOpenAdd]);
 
-  const resetDraft = () => setDraft({ name: '', categoryId: '', duration: '', basePrice: '', discountedPrice: '', description: '' });
+  const resetDraft = () => {
+    setDraft({ name: '', categoryId: '', duration: '', basePrice: '', discountedPrice: '', description: '' });
+    setPendingImage(null);
+    setImagePreview(null);
+  };
+
+  const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPendingImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
 
   const filtered = useMemo(() => services.filter((s) => {
     const matchSearch  = !search || s.name.toLowerCase().includes(search.toLowerCase());
@@ -91,10 +107,17 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
           name: draft.name, category_id: draft.categoryId, duration: draft.duration,
           base_price: base, discounted_price: disc, description: draft.description,
         });
+        let imageUrl = data.image_url;
+        if (pendingImage) {
+          setUploadingId(editId);
+          const { data: imgData } = await servicesAPI.uploadThumbnail(editId, pendingImage);
+          imageUrl = imgData.url;
+          setUploadingId(null);
+        }
         setServices((p) => p.map((s) => s.id === editId
           ? { ...s, name: data.name, categoryId: data.category_id, duration: data.duration,
               basePrice: data.base_price, discountedPrice: data.discounted_price,
-              description: data.description } : s));
+              description: data.description, imageUrl } : s));
         toast({ title: 'Service updated' });
         setEditId(null);
       } else {
@@ -103,15 +126,24 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
           base_price: base, discounted_price: disc, description: draft.description,
           active: true, popular: false,
         } as any);
+        let imageUrl: string | undefined;
+        if (pendingImage) {
+          setUploadingId(data.id);
+          const { data: imgData } = await servicesAPI.uploadThumbnail(data.id, pendingImage);
+          imageUrl = imgData.url;
+          setUploadingId(null);
+        }
         setServices((p) => [...p, {
           id: data.id, name: data.name, categoryId: data.category_id,
           duration: data.duration, basePrice: data.base_price, discountedPrice: data.discounted_price,
           description: data.description, rating: 0, bookings: 0, active: true, popular: false,
+          imageUrl,
         }]);
         toast({ title: 'Service added ✓' });
         setAdding(false);
       }
     } catch {
+      setUploadingId(null);
       toast({ title: 'Failed to save service', variant: 'destructive' });
     }
     resetDraft();
@@ -119,6 +151,8 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
 
   const startEdit = (s: Service) => {
     setDraft({ name: s.name, categoryId: s.categoryId, duration: s.duration, basePrice: String(s.basePrice), discountedPrice: String(s.discountedPrice ?? ''), description: s.description });
+    setPendingImage(null);
+    setImagePreview((s as any).imageUrl ?? null);
     setEditId(s.id);
     setAdding(false);
   };
@@ -219,9 +253,39 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
                 <InlineInput label="Discounted Price (₹, optional)" value={draft.discountedPrice} onChange={(v) => setDraft((p) => ({ ...p, discountedPrice: v }))} placeholder="e.g. 1599" type="number" />
                 <InlineInput label="Description" value={draft.description} onChange={(v) => setDraft((p) => ({ ...p, description: v }))} placeholder="Short description" />
               </div>
+
+              {/* Thumbnail upload */}
+              <div className="mb-4">
+                <p className="text-[11px] font-semibold text-[#6B7280] mb-1.5">Thumbnail Image</p>
+                <div className="flex items-center gap-3">
+                  {imagePreview ? (
+                    <div className="relative w-20 h-14 rounded-lg overflow-hidden border border-[#EBEBEB] shrink-0">
+                      <Image src={imagePreview} alt="preview" fill className="object-cover" unoptimized={imagePreview.startsWith('blob:')} />
+                      <button
+                        type="button"
+                        onClick={() => { setPendingImage(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                        className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 rounded-full flex items-center justify-center text-white"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-20 h-14 rounded-lg border-2 border-dashed border-[#FDDDD5] bg-[#FFF8F6] flex items-center justify-center shrink-0">
+                      <ImagePlus className="w-5 h-5 text-[#C84B31]/40" />
+                    </div>
+                  )}
+                  <div>
+                    <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImagePick} className="hidden" id="svc-img-input" />
+                    <label htmlFor="svc-img-input" className="cursor-pointer inline-flex items-center gap-1.5 h-8 px-3 bg-white border border-[#EBEBEB] text-[#6B7280] text-[11px] font-semibold rounded-lg hover:bg-[#F5F4F2] transition-colors">
+                      <ImagePlus className="w-3.5 h-3.5" /> {imagePreview ? 'Change image' : 'Upload image'}
+                    </label>
+                    <p className="text-[10px] text-[#9CA3AF] mt-1">JPEG, PNG or WebP · max 5 MB</p>
+                  </div>
+                </div>
+              </div>
               <div className="flex gap-2">
-                <button onClick={handleSave} className="flex items-center gap-1.5 h-9 px-4 bg-[#C84B31] hover:bg-[#B04028] text-white text-[12px] font-semibold rounded-xl transition-colors">
-                  <Check className="w-3.5 h-3.5" /> {editId ? 'Update' : 'Add Service'}
+                <button onClick={handleSave} disabled={!!uploadingId} className="flex items-center gap-1.5 h-9 px-4 bg-[#C84B31] hover:bg-[#B04028] disabled:opacity-60 text-white text-[12px] font-semibold rounded-xl transition-colors">
+                  {uploadingId ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</> : <><Check className="w-3.5 h-3.5" /> {editId ? 'Update' : 'Add Service'}</>}
                 </button>
                 <button onClick={() => { setAdding(false); setEditId(null); resetDraft(); }} className="flex items-center gap-1.5 h-9 px-4 bg-white border border-[#EBEBEB] text-[#6B7280] text-[12px] font-semibold rounded-xl hover:bg-[#F5F4F2] transition-colors">
                   <X className="w-3.5 h-3.5" /> Cancel
@@ -238,7 +302,7 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
           <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b border-[#EBEBEB] bg-[#F5F4F2]">
-                {['Service', 'Category', 'Duration', 'Pricing', 'Stats', 'Status', 'Actions'].map((h) => (
+                {['', 'Service', 'Category', 'Duration', 'Pricing', 'Stats', 'Status', 'Actions'].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -246,6 +310,19 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
             <tbody>
               {filtered.map((s) => (
                 <tr key={s.id} className={cn('border-b border-[#EBEBEB] transition-colors', s.active ? 'hover:bg-[#FFF0EC]/30' : 'bg-[#F5F4F2]/60 hover:bg-[#F5F4F2]')}>
+                  {/* Thumbnail */}
+                  <td className="px-3 py-3">
+                    {(s as any).imageUrl ? (
+                      <div className="relative w-12 h-9 rounded-md overflow-hidden border border-[#EBEBEB]">
+                        <Image src={(s as any).imageUrl} alt={s.name} fill className="object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-9 rounded-md border border-dashed border-[#EBEBEB] bg-[#F5F4F2] flex items-center justify-center">
+                        <ImagePlus className="w-3.5 h-3.5 text-[#D1D5DB]" />
+                      </div>
+                    )}
+                    {uploadingId === s.id && <Loader2 className="w-3 h-3 animate-spin text-[#C84B31] mt-1" />}
+                  </td>
                   <td className="px-4 py-3">
                     <p className={cn('text-[13px] font-semibold', s.active ? 'text-[#1A1A1A]' : 'text-[#9CA3AF]')}>{s.name}</p>
                     <div className="flex items-center gap-1 mt-0.5">
