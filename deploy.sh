@@ -12,14 +12,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-PROJECT_ID="amara-go"
+PROJECT_ID="amarago-1173a"
 REGION="asia-south1"
 SERVICE_NAME="amarago-backend"
 REPO="asia-south1-docker.pkg.dev/$PROJECT_ID/amarago"
 IMAGE="$REPO/backend:$(date +%Y%m%d%H%M%S)"
 FRONTEND_URL="${FRONTEND_URL:-}"
 
-SA_JSON="./amarago-f0dc7-firebase-adminsdk-fbsvc-f6e6af3fbb.json"
+SA_JSON="./amara_go_service_account.json"
 
 # ── Validate ──────────────────────────────────────────────────────────────────
 if [ ! -f .env ]; then
@@ -54,6 +54,7 @@ with open('$ENV_VARS_FILE', 'w') as f:
     f.write(f'FIREBASE_SERVICE_ACCOUNT_JSON: {yq(sa)}\n')
     f.write(f'FIREBASE_STORAGE_BUCKET: {yq("$FIREBASE_STORAGE_BUCKET")}\n')
     f.write(f'CORS_ORIGINS: {yq("$CORS_ORIGINS")}\n')
+    f.write(f'ADMIN_EMAIL: {yq("amarago122@gmail.com")}\n')
 PYEOF
 
 # ── Ensure Artifact Registry repo exists ─────────────────────────────────────

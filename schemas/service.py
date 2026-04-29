@@ -40,6 +40,7 @@ class ServiceBase(BaseModel):
     description: str = Field(default="", max_length=1000)
     active: bool = True
     popular: bool = False
+    image_url: Optional[str] = None
 
 
 class CreateServiceRequest(ServiceBase):
@@ -74,6 +75,7 @@ class PackageBase(BaseModel):
     price: float = Field(..., gt=0)
     active: bool = True
     badge: Optional[str] = Field(None, max_length=50)
+    image_url: Optional[str] = None
 
 
 class CreatePackageRequest(PackageBase):

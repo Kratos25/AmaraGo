@@ -20,8 +20,12 @@ from typing import Callable
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+import os
+
 from firebase_admin import auth as firebase_auth
 from firebase_config import get_db
+
+_ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "").lower().strip()
 
 _bearer_scheme = HTTPBearer(auto_error=True)
 
@@ -68,10 +72,13 @@ async def get_current_user(
         )
 
     data = user_doc.to_dict()
+    email_val: str = (data.get("email") or decoded.get("email") or "").lower().strip()
+    # If this email is designated as the super-admin via env var, always grant admin role
+    role = "admin" if (_ADMIN_EMAIL and email_val == _ADMIN_EMAIL) else data.get("role", "client")
     return CurrentUser(
         uid=uid,
-        email=data.get("email") or decoded.get("email"),
-        role=data.get("role", "client"),
+        email=email_val or None,
+        role=role,
         name=data.get("name") or data.get("displayName"),
     )
 
