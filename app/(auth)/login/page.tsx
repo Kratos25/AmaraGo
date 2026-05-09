@@ -407,10 +407,8 @@ function AuthPage() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect') ?? null;
 
-  // ── SINGLE unified auth effect ──────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      // Skip redirect while registration flow is in progress — we handle it manually
       if (isRegistering.current) return;
       if (user) {
         try {
@@ -428,7 +426,6 @@ function AuthPage() {
     return () => unsubscribe();
   }, []);
 
-  // ── Email / Password login ──────────────────────────────────────────────────
   const handleCredentialsSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -446,22 +443,16 @@ function AuthPage() {
     }
   };
 
-  // ── Email / Password register ───────────────────────────────────────────────
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    isRegistering.current = true; // prevent onAuthStateChanged from redirecting mid-flow
+    isRegistering.current = true;
     try {
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
-
-      // Update Firebase displayName so it's visible everywhere
       const { updateProfile } = await import('firebase/auth');
       await updateProfile(user, { displayName: name });
-
       const token = await user.getIdToken();
       await setSessionCookie(token);
-
-      // Register user profile in backend (idempotent — safe to call on every register)
       await authAPI.registerClient({
         name,
         email: user.email ?? email,
@@ -469,7 +460,6 @@ function AuthPage() {
         firebase_uid: user.uid,
         id_token: token,
       });
-
       toast({ title: 'Account created!', description: 'Welcome to AmaraGo.' });
       router.replace('/client/home');
     } catch (error: any) {
@@ -484,18 +474,14 @@ function AuthPage() {
     }
   };
 
-  // ── Google sign-in ──────────────────────────────────────────────────────────
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-
     try {
       const { user } = await signInWithPopup(auth, provider);
       const token = await user.getIdToken();
       await setSessionCookie(token);
-
-      // Register in backend if first time (idempotent — backend checks existence)
       const userSnap = await getDoc(doc(db, "users", user.uid));
       if (!userSnap.exists()) {
         await authAPI.registerClient({
@@ -506,7 +492,6 @@ function AuthPage() {
           id_token: token,
         });
       }
-
       toast({ title: 'Welcome!', description: `Signed in as ${user.displayName ?? user.email}` });
       const path = await getRedirectPath(user);
       router.replace(path);
@@ -523,7 +508,6 @@ function AuthPage() {
     }
   };
 
-  // ── Forgot password ─────────────────────────────────────────────────────────
   const handleForgotPassword = async () => {
     if (!email.trim()) {
       toast({
@@ -551,38 +535,46 @@ function AuthPage() {
   if (authChecking) return null;
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    // KEY FIX: Use min-h-screen instead of h-screen, and allow natural scroll only on mobile
+    // On desktop (lg+) we lock to screen height with overflow-hidden
+    <div className="min-h-screen lg:h-screen flex lg:overflow-hidden">
+      {/* Left panel: hidden on mobile */}
       <LoginLeftPanel />
 
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-8 bg-[#F9F7F5]">
-        <div className="w-full max-w-md max-h-screen overflow-y-auto">
+      {/* Right panel: full width on mobile, half on desktop */}
+      <div className="w-full lg:w-1/2 flex items-start lg:items-center justify-center bg-[#F9F7F5] px-5 py-8 sm:px-8 lg:p-8">
+        <div className="w-full max-w-sm">
 
-          <div className="lg:hidden text-center mb-10">
-            <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl mb-8">
-              <Image src={Logo} alt="Amara Logo" className="w-24 h-24 rounded-2xl shadow-xl" />
-            </div>
-            <h1 className="text-4xl font-bold text-gray-800">AmaraGo</h1>
+          {/* Mobile-only logo — compact */}
+          <div className="lg:hidden flex flex-col items-center mb-6">
+            <Image
+              src={Logo}
+              alt="Amara Logo"
+              className="w-14 h-14 rounded-xl shadow-md mb-2"
+            />
+            <h1 className="text-2xl font-bold text-gray-800">AmaraGo</h1>
           </div>
 
-          <h2 className="text-3xl font-bold text-gray-800 mb-2 text-center lg:text-left">
+          <h2 className="text-2xl font-bold text-gray-800 mb-1 text-center lg:text-left">
             {mode === 'login' ? 'Welcome back!' : 'Create your account'}
           </h2>
-          <p className="text-gray-600 mb-8 text-center lg:text-left">
+          <p className="text-sm text-gray-500 mb-6 text-center lg:text-left">
             {mode === 'login'
               ? 'Sign in to access your beauty services'
               : 'Join Amara and discover premium care'}
           </p>
 
-          <div className="flex bg-[#F9F7F5] shadow-lg rounded-xl p-1.5 mb-8">
+          {/* Mode toggle */}
+          <div className="flex bg-white shadow rounded-xl p-1 mb-6">
             {(['login', 'register'] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
-                className={`flex-1 py-3 px-6 rounded-xl text-sm font-medium transition-all capitalize ${
+                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all capitalize ${
                   mode === m
-                    ? 'bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] text-white shadow-md'
-                    : 'text-gray-700 hover:bg-transparent cursor-pointer'
+                    ? 'bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] text-white shadow'
+                    : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 {m === 'login' ? 'Login' : 'Register'}
@@ -592,7 +584,7 @@ function AuthPage() {
 
           {mode === 'login' ? (
             <>
-              <form onSubmit={handleCredentialsSubmit} className="space-y-5">
+              <form onSubmit={handleCredentialsSubmit} className="space-y-4">
                 <Field label="Email address" htmlFor="email">
                   <Input
                     id="email"
@@ -601,7 +593,7 @@ function AuthPage() {
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setFormError(null); }}
                     required
-                    className="mt-1.5"
+                    className="mt-1 h-10 text-sm"
                   />
                 </Field>
 
@@ -614,15 +606,15 @@ function AuthPage() {
                     error={!!formError}
                   />
                   {formError && (
-                    <p className="text-sm text-red-500 mt-1">{formError}</p>
+                    <p className="text-xs text-red-500 mt-1">{formError}</p>
                   )}
                 </Field>
 
-                <div className="text-right">
+                <div className="text-right -mt-1">
                   <button
                     type="button"
                     onClick={handleForgotPassword}
-                    className="text-sm text-[#e5849c] hover:underline"
+                    className="text-xs text-[#e5849c] hover:underline"
                   >
                     Forgot password?
                   </button>
@@ -636,7 +628,7 @@ function AuthPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full mb-4 flex items-center justify-center gap-3 border border-gray-300 bg-white hover:bg-gray-50"
+                className="w-full flex items-center justify-center gap-2 border border-gray-200 bg-white hover:bg-gray-50 h-10 text-sm"
                 onClick={handleGoogleSignIn}
                 disabled={googleLoading}
               >
@@ -644,14 +636,14 @@ function AuthPage() {
                   "Signing in…"
                 ) : (
                   <>
-                    <FcGoogle size={20} />
+                    <FcGoogle size={18} />
                     Sign in with Google
                   </>
                 )}
               </Button>
             </>
           ) : (
-            <form onSubmit={handleRegister} className="space-y-5">
+            <form onSubmit={handleRegister} className="space-y-4">
               <Field label="Full Name" htmlFor="name">
                 <Input
                   id="name"
@@ -659,7 +651,7 @@ function AuthPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="mt-1.5"
+                  className="mt-1 h-10 text-sm"
                 />
               </Field>
 
@@ -671,7 +663,7 @@ function AuthPage() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
-                  className="mt-1.5"
+                  className="mt-1 h-10 text-sm"
                 />
               </Field>
 
@@ -683,7 +675,7 @@ function AuthPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="mt-1.5"
+                  className="mt-1 h-10 text-sm"
                 />
               </Field>
 
@@ -700,7 +692,7 @@ function AuthPage() {
             </form>
           )}
 
-          <div className="mt-8 text-center text-sm text-gray-600">
+          <div className="mt-5 text-center text-xs text-gray-500">
             {mode === 'login' ? (
               <>New here?{' '}
                 <button type="button" onClick={() => setMode('register')} className="text-[#e5849c] font-medium hover:underline">
@@ -716,11 +708,11 @@ function AuthPage() {
             )}
           </div>
 
-          <div className="mt-4 text-center">
+          <div className="mt-3 text-center">
             <button
               type="button"
               onClick={() => router.push('/client/home')}
-              className="text-sm text-gray-400 hover:text-gray-600 underline underline-offset-2 transition-colors"
+              className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition-colors"
             >
               Browse as guest
             </button>
@@ -736,12 +728,12 @@ function AuthPage() {
 
 function Divider() {
   return (
-    <div className="relative my-6">
+    <div className="relative my-4">
       <div className="absolute inset-0 flex items-center">
-        <div className="w-full border-t border-gray-300" />
+        <div className="w-full border-t border-gray-200" />
       </div>
-      <div className="relative flex justify-center text-sm">
-        <span className="bg-[#F9F7F5] px-4 text-gray-500">or continue with google</span>
+      <div className="relative flex justify-center text-xs">
+        <span className="bg-[#F9F7F5] px-3 text-gray-400">or continue with google</span>
       </div>
     </div>
   );
@@ -750,7 +742,7 @@ function Divider() {
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
   return (
     <div>
-      <Label htmlFor={htmlFor}>{label}</Label>
+      <Label htmlFor={htmlFor} className="text-sm">{label}</Label>
       {children}
     </div>
   );
@@ -762,21 +754,21 @@ function PasswordInput({
   value: string; onChange: (v: string) => void; show: boolean; onToggle: () => void; error?: boolean;
 }) {
   return (
-    <div className="relative mt-1.5">
+    <div className="relative mt-1">
       <Input
         type={show ? 'text' : 'password'}
         placeholder="••••••••"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required
-        className={error ? "border-red-500 focus-visible:ring-red-500" : ""}
+        className={`h-10 text-sm pr-10 ${error ? "border-red-500 focus-visible:ring-red-500" : ""}`}
       />
       <button
         type="button"
         onClick={onToggle}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
       >
-        {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
     </div>
   );
@@ -786,7 +778,7 @@ function SubmitButton({ loading, label, loadingLabel }: { loading: boolean; labe
   return (
     <Button
       type="submit"
-      className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white py-6 text-lg font-medium shadow-lg transition-all"
+      className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white h-10 text-sm font-medium shadow-md transition-all"
       disabled={loading}
     >
       {loading ? loadingLabel : label}
@@ -810,9 +802,9 @@ function friendlyError(code: string): string {
 }
 
 export default function LoginPage() {
-    return (
-        <Suspense fallback={null}>
-            <AuthPage />
-        </Suspense>
-    );
+  return (
+    <Suspense fallback={null}>
+      <AuthPage />
+    </Suspense>
+  );
 }

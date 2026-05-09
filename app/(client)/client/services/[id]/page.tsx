@@ -166,7 +166,7 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
       </div>
 
       {/* ── Sticky bottom CTA ── */}
-      <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 px-4 py-4">
+      <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 px-4 py-4 mb-16 md:mb-0">
         <div className="max-w-2xl mx-auto flex gap-3">
           {/* Add to Cart */}
           <button

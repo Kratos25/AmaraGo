@@ -485,7 +485,7 @@ export default function Bookings() {
         </div>
 
         {/* ── Tabs ── */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none mb-5">
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar mb-5">
           {tabs.map((tab) => (
             <button
               key={tab.key}

@@ -174,7 +174,7 @@ export default function Services() {
           </div>
 
           {/* Category chips */}
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {categoryList.map((cat) => {
               const active = activeCategory === cat.name;
               return (
