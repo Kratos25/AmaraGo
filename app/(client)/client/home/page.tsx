@@ -2,14 +2,13 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Clock, Star, MapPin, Bell, Copy, CheckCheck, Tag, ChevronRight, Flame, ShieldCheck, RefreshCcw, Clock3, BadgeCheck, X, ChevronDown } from 'lucide-react';
+import { Search, Clock, Star, MapPin, Copy, CheckCheck, Tag, ChevronRight, ChevronLeft, ChevronDown, X, Check, ArrowRight } from 'lucide-react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { couponsAPI, categoriesAPI, packagesAPI, servicesAPI } from '@/lib/api';
 import { useCart } from '@/config/context/CartContext';
 import { CartQtyButton } from '@/components/client/CartQtyButton';
-import { PackageCard } from '@/components/client/PackageCard';
 import { CouponCardSkeleton } from '@/components/ui/skeletons';
 import { useToast } from '@/hooks/use-toast';
 import { ProviderRegistrationModal } from '@/app/(client)/client/_components/ProviderRegistrationModal';
@@ -45,6 +44,7 @@ interface Service {
   discount: string;
   rawDiscounted: number;
   rawOriginal: number;
+  imageUrl?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,136 +68,12 @@ function getEmoji(name: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fix #6 — Marquee that only renders ~2× visible-width worth of cards
-// (no full duplication of entire array in DOM)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const CARD_WIDTH = 176 + 14; // w-44 (176px) + gap (14px)
-const VIEWPORT_CARDS = Math.ceil((typeof window !== 'undefined' ? window.innerWidth : 390) / CARD_WIDTH) + 2;
-
-function PopularServicesSlider({
-  services,
-  onNavigate,
-}: {
-  services: Service[];
-  onNavigate: (id: string) => void;
-}) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const animRef = useRef<number | null>(null);
-  const posRef = useRef(0);
-  const pausedRef = useRef(false);
-  const focusedRef = useRef(false);
-
-  // Only duplicate enough cards to fill ~2 viewports for the loop
-  const visible = useMemo(() => {
-    if (services.length === 0) return [];
-    const needed = Math.max(VIEWPORT_CARDS * 2, services.length * 2);
-    const result: (Service & { _key: string })[] = [];
-    let i = 0;
-    while (result.length < needed) {
-      result.push({ ...services[i % services.length], _key: `${services[i % services.length].id}-${i}` });
-      i++;
-    }
-    return result;
-  }, [services]);
-
-  const halfWidth = useMemo(() => (services.length * CARD_WIDTH), [services.length]);
-
-  useEffect(() => {
-    if (visible.length === 0) return;
-    const speed = 0.5; // px per frame
-
-    const tick = () => {
-      if (!pausedRef.current && !focusedRef.current && trackRef.current) {
-        posRef.current += speed;
-        if (posRef.current >= halfWidth) posRef.current -= halfWidth;
-        trackRef.current.style.transform = `translateX(-${posRef.current}px)`;
-      }
-      animRef.current = requestAnimationFrame(tick);
-    };
-    animRef.current = requestAnimationFrame(tick);
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-  }, [halfWidth, visible.length]);
-
-  // Fix #10 — keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(id); }
-  };
-
-  return (
-    <div
-      className="overflow-hidden -mx-4 md:-mx-8"
-      onMouseEnter={() => { pausedRef.current = true; }}
-      onMouseLeave={() => { pausedRef.current = false; }}
-    >
-      <div
-        ref={trackRef}
-        className="flex will-change-transform"
-        style={{ gap: '14px', padding: '6px 16px 14px', width: 'max-content' }}
-      >
-        {visible.map((service) => (
-          <button
-            key={service._key}
-            onClick={() => onNavigate(service.id)}
-            onKeyDown={(e) => handleKeyDown(e, service.id)}
-            onFocus={() => { focusedRef.current = true; pausedRef.current = true; }}
-            onBlur={() => { focusedRef.current = false; pausedRef.current = false; }}
-            tabIndex={0}
-            aria-label={`${service.name}, ${service.discountedPrice}${service.discount ? ', ' + service.discount : ''}`}
-            className="flex-shrink-0 w-44 rounded-2xl overflow-hidden bg-white border border-gray-100 hover:border-[#e5849c]/50 hover:shadow-md transition-all text-left group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5849c] focus-visible:ring-offset-2"
-          >
-            <div className="h-[72px] bg-gradient-to-br from-[#111827] to-[#1f2937] flex items-center justify-center relative overflow-hidden">
-              <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_70%_30%,#e5849c,transparent_60%)]" />
-              <span className="text-4xl relative z-10 drop-shadow-sm">{getEmoji(service.name)}</span>
-              {service.discount && (
-                <span className="absolute top-2 right-2 text-[9px] font-bold bg-[#e5849c] text-white px-1.5 py-0.5 rounded-full leading-none">
-                  {service.discount}
-                </span>
-              )}
-            </div>
-            <div className="p-3">
-              <p className="font-semibold text-[#111827] text-[11px] leading-tight line-clamp-2 mb-2 group-hover:text-[#e5849c] transition-colors min-h-[30px]">
-                {service.name}
-              </p>
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className="font-bold text-sm text-[#111827]">{service.discountedPrice}</p>
-                  {service.discount && (
-                    <p className="text-[10px] text-gray-400 line-through leading-none">{service.originalPrice}</p>
-                  )}
-                </div>
-                <span className="flex items-center gap-0.5 text-[10px] text-gray-400 mb-0.5">
-                  <Clock size={9} />{service.duration}
-                </span>
-              </div>
-              {service.rating > 0 && (
-                <div className="flex items-center gap-1 mt-1.5 border-t border-gray-50 pt-1.5">
-                  <Star size={9} className="fill-amber-400 text-amber-400" />
-                  <span className="text-[10px] text-amber-500 font-semibold">{service.rating}</span>
-                  <span className="text-[10px] text-gray-300 ml-auto">Tap to book</span>
-                </div>
-              )}
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fix #4 — Location Picker Modal
+// Location Picker Modal
 // ─────────────────────────────────────────────────────────────────────────────
 
 function LocationPickerModal({
-  current,
-  onSelect,
-  onClose,
-}: {
-  current: string;
-  onSelect: (loc: string) => void;
-  onClose: () => void;
-}) {
+  current, onSelect, onClose,
+}: { current: string; onSelect: (loc: string) => void; onClose: () => void }) {
   const [input, setInput] = useState('');
   const suggestions = [
     'Bandra, Mumbai', 'Andheri, Mumbai', 'Juhu, Mumbai', 'Powai, Mumbai',
@@ -206,23 +82,16 @@ function LocationPickerModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center" onClick={onClose}>
-      <div
-        className="bg-white w-full max-w-md rounded-t-3xl md:rounded-3xl p-5 pb-8 md:pb-5"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-white w-full max-w-md rounded-t-3xl md:rounded-3xl p-5 pb-8 md:pb-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-[#111827]">Change location</h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><X size={18} /></button>
         </div>
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            autoFocus
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+          <input autoFocus value={input} onChange={(e) => setInput(e.target.value)}
             placeholder="Search area, locality…"
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#e5849c]/40"
-          />
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#E91E8C]/30" />
         </div>
         <button
           onClick={() => {
@@ -239,18 +108,15 @@ function LocationPickerModal({
               () => onSelect('Mumbai, Maharashtra')
             );
           }}
-          className="flex items-center gap-2 text-[#e5849c] font-semibold text-sm mb-4 hover:underline"
+          className="flex items-center gap-2 text-[#E91E8C] font-semibold text-sm mb-4 hover:underline"
         >
           <MapPin size={14} /> Use current location
         </button>
         <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Popular areas</p>
         <div className="space-y-1 max-h-56 overflow-y-auto">
           {suggestions.map((s) => (
-            <button
-              key={s}
-              onClick={() => onSelect(s)}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-sm hover:bg-[#fff5f7] transition-colors ${s === current ? 'bg-[#fff5f7] text-[#e5849c] font-semibold' : 'text-[#111827]'}`}
-            >
+            <button key={s} onClick={() => onSelect(s)}
+              className={`w-full text-left px-3 py-2.5 rounded-xl text-sm hover:bg-pink-50 transition-colors ${s === current ? 'bg-pink-50 text-[#E91E8C] font-semibold' : 'text-[#111827]'}`}>
               {s}
             </button>
           ))}
@@ -261,10 +127,12 @@ function LocationPickerModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fix #1 — Functional Search with live filter dropdown
+// Combined Search Bar (location + search input + button)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SearchBar({ services, onNavigate }: { services: Service[]; onNavigate: (id: string) => void }) {
+function CombinedSearchBar({
+  services, onNavigate, userLocation, onLocationClick,
+}: { services: Service[]; onNavigate: (id: string) => void; userLocation: string; onLocationClick: () => void }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
@@ -276,7 +144,6 @@ function SearchBar({ services, onNavigate }: { services: Service[]; onNavigate: 
     return services.filter((s) => s.name.toLowerCase().includes(q)).slice(0, 6);
   }, [query, services]);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setFocused(false);
@@ -295,45 +162,51 @@ function SearchBar({ services, onNavigate }: { services: Service[]; onNavigate: 
   return (
     <div ref={ref} className="relative">
       <form onSubmit={handleSubmit}>
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" size={20} />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => setFocused(true)}
-          placeholder="Search haircut, facial, massage…"
-          className="w-full pl-11 pr-4 py-4 rounded-xl bg-white text-sm text-gray-800 placeholder:text-gray-400 outline-none shadow-lg focus:ring-2 focus:ring-[#e5849c]/40"
-        />
-        {query && (
-          <button type="button" onClick={() => setQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-            <X size={16} />
+        <div className="flex items-stretch bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden h-12">
+          {/* Location pill */}
+          <button type="button" onClick={onLocationClick}
+            className="hidden md:flex items-center gap-1.5 px-3 border-r border-gray-200 text-xs text-gray-600 hover:bg-gray-50 flex-shrink-0 whitespace-nowrap">
+            <MapPin size={13} className="text-[#E91E8C]" />
+            <span className="max-w-[120px] truncate">{userLocation}</span>
+            <ChevronDown size={11} className="text-gray-400" />
           </button>
-        )}
+          {/* Search input */}
+          <div className="relative flex-1 flex items-center">
+            <Search className="absolute left-3 text-gray-400 pointer-events-none" size={16} />
+            <input
+              type="search" value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setFocused(true)}
+              placeholder={`Try "Hair Spa" or "Bridal Makeup"`}
+              className="w-full h-full pl-9 pr-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
+            />
+          </div>
+          {/* Search button */}
+          <button type="submit"
+            className="bg-[#E91E8C] hover:bg-[#c7166f] text-white text-sm font-bold px-5 flex items-center gap-1.5 transition-colors flex-shrink-0">
+            Search <ArrowRight size={15} />
+          </button>
+        </div>
       </form>
 
-      {/* Live results dropdown */}
+      {/* Dropdown results */}
       {showDropdown && (
         <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
           {results.length > 0 ? (
             <>
               {results.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => { onNavigate(s.id); setFocused(false); setQuery(''); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#fff5f7] transition-colors text-left border-b border-gray-50 last:border-0"
-                >
+                <button key={s.id} onClick={() => { onNavigate(s.id); setFocused(false); setQuery(''); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-pink-50 transition-colors text-left border-b border-gray-50 last:border-0">
                   <span className="text-xl">{getEmoji(s.name)}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[#111827] truncate">{s.name}</p>
                     <p className="text-xs text-gray-400">{s.duration} · {s.discountedPrice}</p>
                   </div>
-                  {s.discount && <span className="text-[10px] font-bold text-[#e5849c] bg-[#e5849c]/10 px-1.5 py-0.5 rounded-full">{s.discount}</span>}
+                  {s.discount && <span className="text-[10px] font-bold text-[#E91E8C] bg-[#E91E8C]/10 px-1.5 py-0.5 rounded-full">{s.discount}</span>}
                 </button>
               ))}
-              <button
-                onClick={() => { router.push(`/client/services?q=${encodeURIComponent(query.trim())}`); setFocused(false); }}
-                className="w-full px-4 py-2.5 text-xs font-semibold text-[#e5849c] hover:bg-[#fff5f7] transition-colors text-center"
-              >
+              <button onClick={() => { router.push(`/client/services?q=${encodeURIComponent(query.trim())}`); setFocused(false); }}
+                className="w-full px-4 py-2.5 text-xs font-semibold text-[#E91E8C] hover:bg-pink-50 transition-colors text-center">
                 See all results for "{query}" →
               </button>
             </>
@@ -347,215 +220,380 @@ function SearchBar({ services, onNavigate }: { services: Service[]; onNavigate: 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fix #2 — Sticky header
+// Offers Carousel (with prev/next arrows)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function StickyHeader({
-  userLocation,
-  onLocationClick,
-  onCartClick,
-  allServices,
-  onNavigate,
-}: {
-  userLocation: string;
-  onLocationClick: () => void;
-  onCartClick: () => void;
-  allServices: Service[];
-  onNavigate: (id: string) => void;
+function OffersCarousel({ currentUser, onBookNow, onProfile }: {
+  currentUser: User | null;
+  onBookNow: () => void;
+  onProfile: () => void;
 }) {
-  const router = useRouter();
-  const [visible, setVisible] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-
-  useEffect(() => {
-    const handler = () => setVisible(window.scrollY > 120);
-    window.addEventListener('scroll', handler, { passive: true });
-    return () => window.removeEventListener('scroll', handler);
-  }, []);
+  const [idx, setIdx] = useState(0);
+  const cards = [
+    {
+      gradient: 'from-[#E91E8C] to-[#c7166f]',
+      tag: 'New User',
+      title: '₹200 off your\nfirst booking',
+      sub: 'Use code WELCOME200 at checkout',
+      btnLabel: 'Book Now →',
+      btnStyle: 'bg-white text-[#E91E8C]',
+      onClick: onBookNow,
+      image: '💆',
+    imgSrc: '/assets/offers/offer-new-user.jpg',
+    },
+    {
+      gradient: 'from-[#7c3aed] to-[#a855f7]',
+      tag: 'Referrals',
+      title: 'Refer a friend,\nearn ₹200 each',
+      sub: 'Share & Earn when they book.',
+      btnLabel: 'Invite Friends →',
+      btnStyle: 'bg-white text-[#7c3aed]',
+      onClick: onProfile,
+      image: '🎁',
+      imgSrc: '/assets/offers/offer-referral.jpg',
+    },
+    {
+      gradient: 'from-[#1e3a5f] to-[#1e2b45]',
+      tag: 'Referrals',
+      title: 'Earn points,\nunlock rewards',
+      sub: '₹1 spent = 0.5 pts. Gold at 2000 pts.',
+      btnLabel: 'Explore Rewards →',
+      btnStyle: 'bg-white text-[#1e3a5f]',
+      onClick: onProfile,
+      image: '💎',
+      imgSrc: '/assets/offers/offer-rewards.jpg',
+    },
+  ];
+  const prev = () => setIdx((i) => (i === 0 ? cards.length - 1 : i - 1));
+  const next = () => setIdx((i) => (i === cards.length - 1 ? 0 : i + 1));
 
   return (
-    <header
-      className={`fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all duration-200 ${visible ? 'translate-y-0 shadow-sm' : '-translate-y-full'}`}
-    >
-      <div className="max-w-7xl mx-auto px-4 md:px-8 h-14 flex items-center gap-3">
-        {/* Logo / brand */}
-        <button onClick={() => router.push('/client')} className="font-extrabold text-[#111827] text-lg flex-shrink-0">
-          Amara<span className="text-[#e5849c]">Go</span>
-        </button>
+    <div className="relative">
+      {/* Arrow buttons */}
+      <button onClick={prev}
+        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors">
+        <ChevronLeft size={16} className="text-gray-600" />
+      </button>
+      <button onClick={next}
+        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors">
+        <ChevronRight size={16} className="text-gray-600" />
+      </button>
 
-        {/* Search toggle */}
-        {searchOpen ? (
-          <div className="flex-1">
-            <SearchBar services={allServices} onNavigate={(id) => { onNavigate(id); setSearchOpen(false); }} />
-          </div>
-        ) : (
-          <button
-            onClick={() => setSearchOpen(true)}
-            className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 text-gray-400 text-sm hover:bg-gray-200 transition-colors text-left"
-          >
-            <Search size={15} /> Search services…
-          </button>
-        )}
-
-        {/* Location pill */}
-        <button
-          onClick={onLocationClick}
-          className="hidden md:flex items-center gap-1 text-xs text-gray-600 hover:text-[#e5849c] transition-colors flex-shrink-0"
+      {/* Cards container */}
+      <div className="overflow-hidden">
+        <div
+          className="flex transition-transform duration-300 ease-in-out gap-4"
+          style={{ transform: `translateX(calc(-${idx * 100}% - ${idx * 16}px))` }}
         >
-          <MapPin size={13} className="text-[#e5849c]" />
-          <span className="max-w-[120px] truncate">{userLocation}</span>
-          <ChevronDown size={11} />
-        </button>
-
-        <button onClick={() => router.push('/client/notifications')} aria-label="Notifications" className="flex-shrink-0">
-          <Bell size={20} className="text-gray-500" />
-        </button>
+          {cards.map((card, i) => (
+            <div key={i} className={`flex-shrink-0 w-full md:w-[calc(33.333%-11px)] rounded-2xl bg-gradient-to-br ${card.gradient} relative overflow-hidden min-h-[160px]`}>
+              {/* Offer card image → public/assets/offers/offer-{new-user,referral,rewards}.jpg (300×200px) */}
+              <img src={card.imgSrc} alt={card.tag}
+                className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              <div className="relative p-5 z-10">
+                <span className="text-[10px] font-bold uppercase tracking-widest bg-white/20 text-white px-2.5 py-1 rounded-full">
+                  {card.tag}
+                </span>
+                <h3 className="text-xl font-extrabold text-white mt-3 mb-1 whitespace-pre-line leading-tight">{card.title}</h3>
+                <p className="text-white/70 text-xs mb-4">{card.sub}</p>
+                <button onClick={card.onClick}
+                  className={`text-xs font-bold px-4 py-2 rounded-xl hover:brightness-95 transition ${card.btnStyle}`}>
+                  {card.btnLabel}
+                </button>
+              </div>
+              <div className="absolute right-4 bottom-4 text-6xl opacity-20 pointer-events-none select-none">{card.image}</div>
+            </div>
+          ))}
+        </div>
       </div>
-    </header>
+
+      {/* Desktop: show all 3 cards */}
+      <style jsx>{`
+        @media (min-width: 768px) {
+          div[style] { transform: none !important; flex-wrap: nowrap; }
+        }
+      `}</style>
+    </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fix #9 — Trust badges strip
+// Category Pills
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TrustBadges() {
-  const badges = [
-    { icon: BadgeCheck, label: 'Verified professionals' },
-    { icon: RefreshCcw, label: 'Free rescheduling' },
-    { icon: ShieldCheck, label: 'Safe & hygienic' },
-    { icon: Clock3, label: 'On-time guarantee' },
-  ];
+function CategoryPills({ categories }: { categories: { name: string; icon: string }[] }) {
+  const router = useRouter();
   return (
-    <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0 mt-5 pb-1">
-      {badges.map(({ icon: Icon, label }) => (
-        <div key={label} className="flex-shrink-0 flex items-center gap-1.5 bg-white/10 border border-white/20 rounded-full px-3 py-1.5">
-          <Icon size={13} className="text-[#e5849c]" />
-          <span className="text-white/80 text-xs font-medium whitespace-nowrap">{label}</span>
-        </div>
+    <div className="flex flex-wrap gap-2">
+      {categories.map((cat) => (
+        <button
+          key={cat.name}
+          onClick={() => router.push(`/client/services?category=${cat.name}`)}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-sm text-gray-700 font-medium hover:border-[#E91E8C] hover:text-[#E91E8C] hover:bg-pink-50 transition-all shadow-sm"
+        >
+          <span className="text-base leading-none">{cat.icon}</span>
+          <span>{cat.name}</span>
+        </button>
       ))}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Section header helper
+// Package Card (new Figma style)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SectionHeader({ title, action }: { title: string; action?: { label: string; href: string } }) {
-  const router = useRouter();
+function PackageCardNew({ pkg }: {
+  pkg: { id: string; name: string; desc: string; time: string; price: string; imageUrl?: string; badge?: string; originalPrice?: number };
+}) {
+  const { name, id, time, price, imageUrl, badge, originalPrice } = pkg;
+  const numPrice = parseFloat(price.replace(/[^0-9.]/g, ''));
+  const savings = originalPrice && numPrice < originalPrice
+    ? Math.round(((originalPrice - numPrice) / originalPrice) * 100)
+    : null;
+
   return (
-    <div className="flex items-center justify-between mb-4">
-      <h2 className="text-base font-bold text-[#111827]">{title}</h2>
-      {action && (
-        <button onClick={() => router.push(action.href)} className="text-xs font-semibold text-[#e5849c] hover:underline flex items-center gap-0.5">
-          {action.label} <ChevronRight size={13} />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fix #7 — Service card with CartQtyButton inline
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ServiceGridCard({ service, onNavigate }: { service: Service; onNavigate: (id: string) => void }) {
-  return (
-    <div className="flex items-start gap-3 bg-white rounded-2xl border border-gray-100 p-3 hover:border-[#e5849c]/30 hover:shadow-sm transition-all">
-      <button onClick={() => onNavigate(service.id)} className="flex items-start gap-3 flex-1 min-w-0 text-left group">
-        <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-[#fff5f7] flex items-center justify-center text-xl mt-0.5">
-          {getEmoji(service.name)}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-[#111827] text-xs leading-tight line-clamp-2 group-hover:text-[#e5849c] transition-colors mb-1">
-            {service.name}
-          </p>
-          <p className="font-bold text-sm text-[#111827] leading-none">{service.discountedPrice}</p>
-          {service.discount ? (
-            <p className="text-[10px] text-[#e5849c] font-medium mt-0.5">{service.discount}</p>
-          ) : (
-            <p className="text-[10px] text-gray-400 mt-0.5">{service.duration}</p>
-          )}
-        </div>
-      </button>
-      {/* CartQtyButton inline on card */}
-      <div className="flex-shrink-0 mt-1">
-        <CartQtyButton
-          serviceId={service.id}
-          price={service.rawDiscounted}
-          name={service.name}
+    <div className="flex-shrink-0 w-52 md:w-60 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+      {/* Image */}
+      {/* Package image → public/assets/packages/package-{name}.jpg (480×360px)
+           Backend: upload image_url via admin panel to override this fallback */}
+      <div className="h-36 bg-gradient-to-br from-pink-100 to-pink-50 flex items-center justify-center relative overflow-hidden">
+        <img
+          src={imageUrl || `/assets/packages/package-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.jpg`}
+          alt={name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
+        {/* Emoji fallback shown when image missing */}
+        <span className="text-5xl opacity-30 absolute pointer-events-none">{getEmoji(name)}</span>
+        {badge && (
+          <span className="absolute top-2 left-2 bg-[#E91E8C] text-white text-[9px] font-bold px-2 py-0.5 rounded-full z-10">
+            {badge}
+          </span>
+        )}
+      </div>
+      {/* Info */}
+      <div className="p-3">
+        <p className="font-bold text-sm text-[#111827] leading-tight line-clamp-2 mb-1">{name}</p>
+        <div className="flex items-center gap-1 text-gray-400 text-xs mb-2">
+          <Clock size={11} /> {time}
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="font-extrabold text-base text-[#E91E8C]">{price}</p>
+            {originalPrice && (
+              <div className="flex items-center gap-1">
+                <p className="text-[10px] text-gray-400 line-through">₹{originalPrice.toLocaleString('en-IN')}</p>
+                {savings && <p className="text-[10px] text-green-600 font-semibold">Save {savings}%</p>}
+              </div>
+            )}
+          </div>
+          <CartQtyButton packageId={id} name={name} price={numPrice} duration={time} />
+        </div>
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fix #11 — Removed AllServicesSection from home (replaced by a teaser grid)
-// Shows only 6 services with "See all services" CTA
+// Trending Now Cards (split layout)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ServiceTeaserSection({ services, onNavigate }: { services: Service[]; onNavigate: (id: string) => void }) {
-  const router = useRouter();
-  const teaser = services.slice(0, 6);
-
+function TrendingCard({
+  service, bgColor, textColor, onNavigate,
+}: { service: Service; bgColor: string; textColor: string; onNavigate: (id: string) => void }) {
+  const bullets = ['Trained & verified professional', 'All tools & products included', 'Hygienic & safe practice'];
   return (
-    <section className="mt-10 mb-[-80px] md:mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-bold text-[#111827]">Popular Services</h2>
-        <button
-          onClick={() => router.push('/client/services')}
-          className="text-xs font-semibold text-[#e5849c] hover:underline flex items-center gap-0.5"
-        >
-          See all services <ChevronRight size={13} />
-        </button>
+    <div className="rounded-2xl overflow-hidden flex h-52 cursor-pointer group shadow-sm hover:shadow-md transition-shadow"
+      onClick={() => onNavigate(service.id)}>
+      {/* Left info panel */}
+      <div className={`flex-1 p-4 flex flex-col justify-between ${bgColor}`}>
+        <div>
+          <p className={`font-extrabold text-sm leading-snug mb-1 ${textColor}`}>{service.name}</p>
+          <p className={`text-xs leading-relaxed mb-2 opacity-80 ${textColor}`}>
+            Premium professional service, ideal for all skin types.
+          </p>
+          <ul className="space-y-1">
+            {bullets.map((b) => (
+              <li key={b} className={`flex items-start gap-1.5 text-[10px] ${textColor} opacity-90`}>
+                <Check size={10} className="mt-0.5 flex-shrink-0" /> {b}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex items-center justify-between mt-2">
+          <span className={`font-extrabold text-base ${textColor}`}>{service.discountedPrice}</span>
+          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+            <ArrowRight size={12} className={textColor} />
+          </div>
+        </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {teaser.map((service) => (
-          <ServiceGridCard key={service.id} service={service} onNavigate={onNavigate} />
-        ))}
+      {/* Trending card image → public/assets/services/service-{name}.jpg (480×360px)
+           Backend: upload image_url via admin panel to override this fallback */}
+      <div className="w-2/5 flex-shrink-0 bg-gray-100 relative overflow-hidden">
+        <img
+          src={service.imageUrl || `/assets/services/service-${service.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.jpg`}
+          alt={service.name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="text-5xl opacity-20">{getEmoji(service.name)}</span>
+        </div>
       </div>
-      {/* CTA block to services page */}
-      <button
-        onClick={() => router.push('/client/services')}
-        className="mt-4 w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-[#e5849c]/30 text-sm font-semibold text-[#e5849c] hover:bg-[#fff5f7] transition-colors"
-      >
-        Browse all services <ChevronRight size={15} />
-      </button>
-    </section>
+    </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fix #8 — Guest coupon teaser
+// Service Card for carousel (Figma package-style card)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ServiceCarouselCard({ service, onNavigate }: { service: Service; onNavigate: (id: string) => void }) {
+  return (
+    <div className="flex-shrink-0 w-52 md:w-60 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+      {/* Service carousel card image → public/assets/services/service-{name}.jpg (480×360px)
+           Backend: upload image_url via admin panel to override this fallback */}
+      <div className="h-36 bg-gradient-to-br from-pink-100 to-pink-50 flex items-center justify-center relative overflow-hidden cursor-pointer"
+        onClick={() => onNavigate(service.id)}>
+        <img
+          src={service.imageUrl || `/assets/services/service-${service.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.jpg`}
+          alt={service.name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+        <span className="text-5xl opacity-30 absolute pointer-events-none">{getEmoji(service.name)}</span>
+        {service.discount && (
+          <span className="absolute top-2 left-2 bg-[#E91E8C] text-white text-[9px] font-bold px-2 py-0.5 rounded-full z-10">
+            {service.discount}
+          </span>
+        )}
+      </div>
+      <div className="p-3">
+        <p className="font-bold text-sm text-[#111827] leading-tight line-clamp-2 mb-1 cursor-pointer hover:text-[#E91E8C] transition-colors"
+          onClick={() => onNavigate(service.id)}>
+          {service.name}
+        </p>
+        <div className="flex items-center gap-1 text-gray-400 text-xs mb-2">
+          <Clock size={11} /> {service.duration}
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="font-extrabold text-base text-[#E91E8C]">{service.discountedPrice}</p>
+            {service.discount && (
+              <p className="text-[10px] text-gray-400 line-through">{service.originalPrice}</p>
+            )}
+          </div>
+          <CartQtyButton serviceId={service.id} name={service.name} price={service.rawDiscounted} duration={service.duration} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Guest Coupon Teaser
 // ─────────────────────────────────────────────────────────────────────────────
 
 function GuestCouponTeaser() {
   const router = useRouter();
   return (
-    <div className="flex-shrink-0 w-72 rounded-2xl overflow-hidden border border-[#e5849c]/30 bg-gradient-to-br from-[#fff5f7] to-white shadow-sm">
-      <div className="h-1.5 bg-[#e5849c]" />
+    <div className="flex-shrink-0 w-72 rounded-2xl overflow-hidden border border-[#E91E8C]/30 bg-gradient-to-br from-pink-50 to-white shadow-sm">
+      <div className="h-1.5 bg-[#E91E8C]" />
       <div className="p-4">
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Tag size={13} className="text-[#e5849c] flex-shrink-0" />
-              <span className="font-bold text-sm text-[#111827] tracking-wide blur-sm select-none">XXXX200</span>
-              <span className="flex-shrink-0 text-[10px] font-bold text-[#e5849c] bg-[#e5849c]/10 px-1.5 py-0.5 rounded-full">UP TO 20% OFF</span>
-            </div>
-            <p className="text-xs text-gray-400 italic">Login to unlock exclusive offers &amp; coupons</p>
-            <p className="text-[10px] text-gray-300 mt-1.5">Min ₹499 · Exclusive member offer</p>
-          </div>
+        <div className="flex items-center gap-2 mb-1">
+          <Tag size={13} className="text-[#E91E8C]" />
+          <span className="font-bold text-sm text-[#111827] blur-sm select-none">XXXX200</span>
+          <span className="text-[10px] font-bold text-[#E91E8C] bg-[#E91E8C]/10 px-1.5 py-0.5 rounded-full">UP TO 20% OFF</span>
         </div>
-        <button
-          onClick={() => router.push('/login')}
-          className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#111827] hover:bg-[#1f2937] text-white text-xs font-semibold py-2 rounded-xl transition-colors"
-        >
+        <p className="text-xs text-gray-400 italic mb-1">Login to unlock exclusive offers &amp; coupons</p>
+        <p className="text-[10px] text-gray-300 mb-3">Min ₹499 · Exclusive member offer</p>
+        <button onClick={() => router.push('/login')}
+          className="w-full flex items-center justify-center gap-1.5 bg-[#111827] hover:bg-[#1f2937] text-white text-xs font-semibold py-2 rounded-xl transition-colors">
           Login to unlock offers
         </button>
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Site Footer
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SiteFooter() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  return (
+    <footer className="bg-[#111827] text-white">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          {/* Brand + Contact */}
+          <div>
+            <div className="flex items-center gap-0 mb-4">
+              <span className="text-[#E91E8C] font-extrabold text-2xl">Amara</span>
+              <span className="text-white font-extrabold text-2xl">Go</span>
+            </div>
+            <p className="text-gray-400 text-sm mb-3">+1 (7635) 547-12-97</p>
+            <p className="text-gray-400 text-sm">support@amara.go</p>
+          </div>
+          {/* Quick Links */}
+          <div>
+            <h4 className="font-bold text-sm mb-4">Quick Links</h4>
+            <ul className="space-y-2">
+              <li><button onClick={() => router.push('/client/services')} className="text-gray-400 text-sm hover:text-white transition-colors">Product</button></li>
+              <li><button onClick={() => router.push('/client/home')} className="text-gray-400 text-sm hover:text-white transition-colors">Information</button></li>
+            </ul>
+          </div>
+          {/* About */}
+          <div>
+            <h4 className="font-bold text-sm mb-4">About</h4>
+            <ul className="space-y-2">
+              <li><button onClick={() => router.push('/client/home')} className="text-gray-400 text-sm hover:text-white transition-colors">Company</button></li>
+              <li><button className="text-gray-400 text-sm hover:text-white transition-colors">Site Map</button></li>
+            </ul>
+          </div>
+          {/* Subscribe */}
+          <div>
+            <h4 className="font-bold text-sm mb-4">Subscribe</h4>
+            <div className="flex items-center bg-white/10 border border-white/20 rounded-lg overflow-hidden">
+              <input
+                type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="Get updates..."
+                className="flex-1 bg-transparent px-3 py-2.5 text-sm text-white placeholder:text-gray-400 outline-none"
+              />
+              <button className="px-3 py-2.5 bg-[#E91E8C] hover:bg-[#c7166f] transition-colors">
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Bottom bar */}
+      <div className="border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* LinkedIn */}
+            <a href="#" className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-gray-400 hover:text-white hover:border-white/40 transition-colors" aria-label="LinkedIn">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+            </a>
+            {/* Facebook */}
+            <a href="#" className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-gray-400 hover:text-white hover:border-white/40 transition-colors" aria-label="Facebook">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+            </a>
+            {/* Twitter/X */}
+            <a href="#" className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-gray-400 hover:text-white hover:border-white/40 transition-colors" aria-label="Twitter">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/></svg>
+            </a>
+          </div>
+          <p className="text-gray-500 text-xs">© 2026 AmaraGo. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
   );
 }
 
@@ -605,6 +643,7 @@ export default function Home() {
       discount: pct > 0 ? `${pct}% OFF` : '',
       rawDiscounted: disc,
       rawOriginal: base,
+      imageUrl: s.image_url,
     };
   }, []);
 
@@ -635,8 +674,8 @@ export default function Home() {
         .catch(() => {});
 
       // Fix #11 — only fetch 6 for the teaser grid (limit param)
-      servicesAPI.list({ active: true, limit: 6 }).then(({ data }) =>
-        setTeaserServices(data.map(mapService))
+      servicesAPI.list({ active: true }).then(({ data }) =>
+        setTeaserServices(data.slice(0, 6).map(mapService))
       ).catch(() => {}).finally(() => setServicesLoading(false));
     }, 300);
 
@@ -742,6 +781,7 @@ export default function Home() {
 
   return (
     <>
+      {/* Modals */}
       {showProviderModal && currentUser && (
         <ProviderRegistrationModal
           user={currentUser}
@@ -749,8 +789,6 @@ export default function Home() {
           onSuccess={handleProviderRegistrationSuccess}
         />
       )}
-
-      {/* Fix #4 — Location picker modal */}
       {showLocationPicker && (
         <LocationPickerModal
           current={userLocation}
@@ -759,232 +797,252 @@ export default function Home() {
         />
       )}
 
-      {/* Fix #2 — Sticky header (appears after scroll) */}
-      <StickyHeader
-        userLocation={userLocation}
-        onLocationClick={() => setShowLocationPicker(true)}
-        onCartClick={() => router.push('/client/cart')}
-        allServices={allServicesForSearch}
-        onNavigate={navigateToService}
-      />
-
-      {/* ── Hero ──────────────────────────────────────────────── */}
-      <section className="bg-[#111827] px-4 pt-14 md:pt-10 pb-10">
-        <div className="max-w-3xl mx-auto">
-          {/* Mobile top row */}
-          <div className="md:hidden flex items-center justify-between mb-6">
-            {/* Fix #4 — clickable location */}
-            <button
-              onClick={() => setShowLocationPicker(true)}
-              className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors"
-            >
-              <MapPin size={15} className="text-[#e5849c]" />
-              <span className="text-sm font-medium">
-                {isLoadingLocation ? 'Detecting…' : userLocation}
-              </span>
-              <ChevronDown size={12} className="text-white/50 mt-0.5" />
-            </button>
-            <div className="flex items-center gap-3">
-              {!providerStatusLoading && (
-                isProvider && isProviderApproved ? (
-                  <button onClick={() => router.push('/provider')} className="text-[#e5849c] border border-[#e5849c]/50 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all">My Provider</button>
-                ) : isProvider ? (
-                  <button disabled className="text-amber-500 border border-amber-300/50 text-xs font-semibold px-3 py-1.5 rounded-full cursor-not-allowed opacity-80">⏳ Approval Pending</button>
-                ) : (
-                  <button onClick={handleProviderButtonClick} className="text-[#e5849c] border border-[#e5849c]/50 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all">Earn with us</button>
-                )
-              )}
-              <button aria-label="Notifications"><Bell size={20} className="text-white/70" /></button>
-            </div>
-          </div>
-
-          {/* Headline + social proof */}
-          <div className="mb-7">
-            <h1 className="text-3xl md:text-4xl font-extrabold text-white leading-tight mb-2">
-              Beauty &amp; wellness,<br />
-              <span className="text-[#e5849c]">at your doorstep.</span>
+      {/* ── HERO — light pink split layout ──────────────────────── */}
+      <section className="bg-[#FEF0F5]">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 md:py-16 flex flex-col md:flex-row items-center gap-8 md:gap-16">
+          {/* Left column */}
+          <div className="flex-1 min-w-0">
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-[#111827] leading-tight mb-3">
+              Self-care starts at your{' '}
+              <span className="text-[#E91E8C]">doorstep.</span>
             </h1>
-            <p className="text-white/50 text-sm mb-3">Book trusted professionals in minutes.</p>
-            {/* Social proof pill */}
-            <div className="flex items-center gap-1.5 w-fit bg-white/10 border border-white/15 rounded-full px-3 py-1">
-              <Star size={11} className="fill-amber-400 text-amber-400" />
-              <span className="text-white/80 text-xs font-medium">4.8 · 10,000+ bookings in Mumbai</span>
+            <p className="text-gray-500 text-sm md:text-base mb-4">
+              Book verified beauty experts in minutes
+            </p>
+            {/* Trust badges */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mb-6">
+              {['Verified Professionals', 'Free rescheduling', 'Safe & hygienic', 'On-time guarantee'].map((b) => (
+                <span key={b} className="flex items-center gap-1 text-xs text-gray-600">
+                  <Check size={12} className="text-[#E91E8C]" strokeWidth={3} /> {b}
+                </span>
+              ))}
+            </div>
+            {/* Combined search bar */}
+            <CombinedSearchBar
+              services={allServicesForSearch}
+              onNavigate={navigateToService}
+              userLocation={isLoadingLocation ? 'Detecting…' : userLocation}
+              onLocationClick={() => setShowLocationPicker(true)}
+            />
+            {/* Social proof */}
+            <div className="flex items-center gap-2 mt-5">
+              <Star size={14} className="fill-amber-400 text-amber-400" />
+              {/* Social proof avatars → public/assets/social-proof/avatar-{1,2,3}.jpg (48×48px) */}
+              <div className="flex -space-x-1">
+                {['/assets/social-proof/avatar-1.jpg', '/assets/social-proof/avatar-2.jpg', '/assets/social-proof/avatar-3.jpg'].map((src, i) => (
+                  <div key={i} className="w-6 h-6 rounded-full bg-pink-200 border-2 border-white overflow-hidden flex items-center justify-center text-xs">
+                    <img src={src} alt={`Customer ${i + 1}`} className="w-full h-full object-cover"
+                      onError={(e) => { const t = e.target as HTMLImageElement; t.style.display='none'; t.parentElement!.textContent='👩'; }} />
+                  </div>
+                ))}
+              </div>
+              <span className="text-xs text-gray-500 font-medium">4.8 &nbsp;·&nbsp; 10,000+ bookings in Mumbai</span>
             </div>
           </div>
-
-          {/* Fix #1 — Functional search */}
-          <SearchBar services={allServicesForSearch} onNavigate={navigateToService} />
-
-          {/* Fix #9 — Trust badges */}
-          <TrustBadges />
-
-          {/* Desktop location + provider pill */}
-          <div className="hidden md:flex items-center justify-between mt-4">
-            {/* Fix #4 — clickable on desktop too */}
-            <button
-              onClick={() => setShowLocationPicker(true)}
-              className="flex items-center gap-1.5 text-white/50 text-xs hover:text-white/80 transition-colors"
-            >
-              <MapPin size={13} className="text-[#e5849c]" />
-              {isLoadingLocation ? 'Detecting location…' : userLocation}
-              <ChevronDown size={11} />
-            </button>
-            {!providerStatusLoading && (
-              isProvider && isProviderApproved ? (
-                <button onClick={() => router.push('/provider')} className="text-[#e5849c] border border-[#e5849c]/40 text-xs font-semibold px-4 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all">Go to Provider Dashboard →</button>
-              ) : isProvider ? (
-                <button disabled className="text-amber-500 border border-amber-300/40 text-xs font-semibold px-4 py-1.5 rounded-full cursor-not-allowed opacity-80">⏳ Waiting for Admin Approval</button>
-              ) : (
-                <button onClick={handleProviderButtonClick} className="text-[#e5849c] border border-[#e5849c]/40 text-xs font-semibold px-4 py-1.5 rounded-full hover:bg-[#e5849c]/10 transition-all">Earn with AmaraGo →</button>
-              )
-            )}
+          {/* Right column — hero professional image
+               → Replace placeholder: public/assets/hero/hero-professional.jpg
+               → Recommended size: 800×1050px portrait */}
+          <div className="flex-shrink-0 w-full md:w-80 lg:w-96 h-72 md:h-[420px] rounded-3xl overflow-hidden relative bg-gradient-to-br from-pink-200 to-pink-100">
+            <img
+              src="/assets/hero/hero-professional.png"
+              alt="AmaraGo beauty professional"
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            {/* Fallback shown while image is missing */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-8xl opacity-20">💆</span>
+            </div>
+            <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-semibold text-[#E91E8C] shadow">
+              AmaraGo
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Page body ────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-4 md:px-8">
+      {/* ── OFFERS & MORE ────────────────────────────────────────── */}
+      <section className="bg-white py-10">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <h2 className="text-xl font-extrabold text-[#111827] mb-5">Offers &amp; More</h2>
+          <OffersCarousel
+            currentUser={currentUser}
+            onBookNow={() => router.push('/client/services')}
+            onProfile={() => router.push('/client/profile')}
+          />
+        </div>
+      </section>
 
-        {/* Promo banners */}
-        <section className="mt-8">
-          <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
-            {[
-              { gradient: 'from-[#111827] to-[#1f2937]', glow: '#e5849c', tag: 'New Users', tagColor: 'text-[#e5849c] bg-[#e5849c]/15', title: '₹200 off\nyour first booking', sub: 'Use code WELCOME200 at checkout', btnStyle: 'bg-[#e5849c] text-white', btnLabel: 'Book Now →', emoji: '💆', onClick: () => router.push('/client/services') },
-              { gradient: 'from-[#7c3aed] to-[#a855f7]', glow: '#fff', tag: 'Referrals', tagColor: 'text-white/80 bg-white/15', title: 'Refer a friend,\nearn ₹200 each', sub: 'Share your code. Earn when they book.', btnStyle: 'bg-white text-[#7c3aed]', btnLabel: 'Share Code →', emoji: '🎁', onClick: () => {} },
-              { gradient: 'from-[#b45309] to-[#d97706]', glow: '#fff', tag: 'Loyalty', tagColor: 'text-white/80 bg-white/15', title: 'Earn points,\nunlock rewards', sub: '₹1 spent = 0.5 pts. Gold at 2000 pts.', btnStyle: 'bg-white text-[#b45309]', btnLabel: 'View Tiers →', emoji: '💎', onClick: () => router.push('/client/profile') },
-            ].map((b, i) => (
-              <div key={i} className={`flex-shrink-0 w-72 md:w-80 rounded-3xl overflow-hidden bg-gradient-to-br ${b.gradient} relative`}>
-                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_70%_30%,var(--glow),transparent_60%)]" style={{ ['--glow' as any]: b.glow }} />
-                <div className="relative p-5">
-                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${b.tagColor}`}>{b.tag}</span>
-                  <h3 className="text-xl font-extrabold text-white mt-3 mb-1 whitespace-pre-line">{b.title}</h3>
-                  <p className="text-white/60 text-xs mb-4">{b.sub}</p>
-                  <button onClick={b.onClick} className={`text-xs font-bold px-4 py-2 rounded-xl hover:brightness-90 transition ${b.btnStyle}`}>{b.btnLabel}</button>
-                </div>
-                <div className="absolute right-0 bottom-0 text-6xl opacity-20 pr-3 pb-2">{b.emoji}</div>
-              </div>
-            ))}
+      {/* ── EXPLORE CATEGORIES ───────────────────────────────────── */}
+      {categories.length > 0 && (
+        <section className="bg-[#FEF0F5] py-10">
+          <div className="max-w-7xl mx-auto px-4 md:px-8">
+            <h2 className="text-xl font-extrabold text-[#111827] mb-5">Explore Categories</h2>
+            <CategoryPills categories={categories} />
           </div>
         </section>
+      )}
 
-        {/* Categories */}
-        {categories.length > 0 && (
-          <section className="mt-8">
-            <SectionHeader title="Browse Categories" />
-            <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap">
-              {categories.map((cat) => (
-                <button
-                  key={cat.name}
-                  onClick={() => router.push(`/client/services?category=${cat.name}`)}
-                  className="flex-shrink-0 flex flex-col items-center gap-2 w-20 md:w-24 group"
-                >
-                  <div className="w-16 h-16 rounded-2xl bg-[#fff5f7] border border-[#e5849c]/20 flex items-center justify-center text-3xl group-hover:bg-[#e5849c]/10 group-hover:border-[#e5849c]/40 transition-all">
-                    {cat.icon}
+      {/* ── SPECIAL PACKAGES ─────────────────────────────────────── */}
+      {(packages.length > 0 || servicesLoading) && (
+        <section className="bg-white py-10">
+          <div className="max-w-7xl mx-auto px-4 md:px-8">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-extrabold text-[#111827]">Special Packages</h2>
+              <button onClick={() => router.push('/client/services')}
+                className="text-sm font-semibold text-[#E91E8C] hover:underline flex items-center gap-0.5">
+                View all <ChevronRight size={14} />
+              </button>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-3 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+              {servicesLoading
+                ? [1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex-shrink-0 w-52 md:w-60 rounded-2xl bg-gray-50 border border-gray-100 animate-pulse">
+                    <div className="h-36 bg-gray-200 rounded-t-2xl" />
+                    <div className="p-3 space-y-2">
+                      <div className="h-3 bg-gray-200 rounded w-3/4" />
+                      <div className="h-3 bg-gray-100 rounded w-1/2" />
+                    </div>
                   </div>
-                  <span className="text-xs font-medium text-gray-700 text-center leading-tight">{cat.name}</span>
-                </button>
+                ))
+                : packages.map((pkg) => <PackageCardNew key={pkg.id} pkg={pkg} />)
+              }
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── TRENDING NOW ─────────────────────────────────────────── */}
+      <section className="bg-[#FEF0F5] py-10">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <h2 className="text-xl font-extrabold text-[#111827] mb-5">Trending Now</h2>
+          {servicesLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1, 2].map((i) => (
+                <div key={i} className="h-52 rounded-2xl bg-gray-100 animate-pulse" />
               ))}
             </div>
-          </section>
-        )}
+          ) : popularServices.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {popularServices.slice(0, 2).map((service, i) => (
+                <TrendingCard
+                  key={service.id}
+                  service={service}
+                  bgColor={i === 0 ? 'bg-[#E91E8C]' : 'bg-[#1e2b45]'}
+                  textColor="text-white"
+                  onNavigate={navigateToService}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </section>
 
-        {/* Fix #8 — Coupons: real for logged-in, teaser for guests */}
-        <section className="mt-8">
-          <SectionHeader title="Today's Offers" />
-          <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
-            {couponsLoading && [1, 2, 3].map((i) => <CouponCardSkeleton key={i} />)}
-
-            {!couponsLoading && !currentUser && <GuestCouponTeaser />}
-
-            {!couponsLoading && currentUser && coupons.map((coupon) => {
-              const isCopied = copiedCode === coupon.code;
-              const discountLabel = coupon.type === 'percentage' ? `${coupon.value}% OFF` : `₹${coupon.value} OFF`;
-              return (
-                <div key={coupon.id} className="flex-shrink-0 w-72 rounded-2xl overflow-hidden border border-[#e5849c]/30 bg-gradient-to-br from-[#fff5f7] to-white shadow-sm">
-                  <div className="h-1.5 bg-[#e5849c]" />
-                  <div className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Tag size={13} className="text-[#e5849c] flex-shrink-0" />
-                          <span className="font-bold text-sm text-[#111827] tracking-wide truncate">{coupon.code}</span>
-                          <span className="flex-shrink-0 text-[10px] font-bold text-[#e5849c] bg-[#e5849c]/10 px-1.5 py-0.5 rounded-full">{discountLabel}</span>
-                        </div>
-                        <p className="text-xs text-gray-600 leading-snug line-clamp-2">{coupon.description}</p>
-                        <p className="text-[10px] text-gray-400 mt-1.5">Min ₹{coupon.minOrder} · Till {coupon.validTo}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleCopyCode(coupon.code)}
-                      className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#111827] hover:bg-[#1f2937] text-white text-xs font-semibold py-2 rounded-xl transition-colors"
-                    >
-                      {isCopied ? <><CheckCheck size={13} /> Copied!</> : <><Copy size={13} /> Copy Code</>}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+      {/* ── MID-PAGE BANNER ──────────────────────────────────────── */}
+      <section className="bg-[#FEF0F5] py-10 border-t border-pink-100">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="rounded-3xl bg-white overflow-hidden flex flex-col md:flex-row items-center shadow-sm border border-pink-100">
+            {/* Left text */}
+            <div className="flex-1 p-8 md:p-12">
+              <div className="flex items-center gap-0 mb-4">
+                <span className="text-[#E91E8C] font-extrabold text-3xl">Amara</span>
+                <span className="text-[#111827] font-extrabold text-3xl">Go</span>
+              </div>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-[#111827] leading-snug">
+                Self-care starts at your doorstep.
+              </h2>
+              <button
+                onClick={() => router.push('/client/services')}
+                className="mt-6 inline-flex items-center gap-2 bg-[#E91E8C] hover:bg-[#c7166f] text-white text-sm font-bold px-6 py-3 rounded-xl transition-colors"
+              >
+                Book Now <ArrowRight size={16} />
+              </button>
+            </div>
+            {/* Mid-page banner image
+                 → Replace placeholder: public/assets/banners/mid-banner-professional.jpg
+                 → Recommended size: 800×576px landscape */}
+            <div className="w-full md:w-80 lg:w-96 h-56 md:h-72 flex-shrink-0 relative bg-gradient-to-br from-pink-100 to-pink-200 overflow-hidden rounded-r-3xl">
+              <img
+                src="/assets/banners/mid-banner-professional.jpg"
+                alt="Beauty service at home"
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="text-8xl opacity-20">💄</span>
+              </div>
+            </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Packages */}
-        {packages.length > 0 && (
-          <section className="mt-10">
-            <SectionHeader title="Special Packages" action={{ label: 'View all', href: '/client/services' }} />
-            <div className="flex gap-5 overflow-x-auto pb-3 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
-              {packages.map((pkg) => <PackageCard key={pkg.id} pkg={pkg} />)}
-            </div>
-          </section>
-        )}
-
-        {/* Fix #3 + #6 + #10 — Trending Now with improved marquee */}
-        <section className="mt-10">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Flame size={15} className="text-[#e5849c]" />
-              <h2 className="text-base font-bold text-[#111827]">Trending Now</h2>
-            </div>
-            <button
-              onClick={() => router.push('/client/services')}
-              className="text-xs font-semibold text-[#e5849c] hover:underline flex items-center gap-0.5"
-            >
-              See all <ChevronRight size={13} />
+      {/* ── POPULAR SERVICES ─────────────────────────────────────── */}
+      <section className="bg-white py-10">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-xl font-extrabold text-[#111827]">Popular Services</h2>
+            <button onClick={() => router.push('/client/services')}
+              className="text-sm font-semibold text-[#E91E8C] hover:underline flex items-center gap-0.5">
+              View all <ChevronRight size={14} />
             </button>
           </div>
-
-          {servicesLoading ? (
-            <div className="flex gap-4 overflow-hidden -mx-4 px-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex-shrink-0 w-44 rounded-2xl bg-white border border-gray-100 animate-pulse">
-                  <div className="h-[72px] bg-gray-200 rounded-t-2xl" />
+          <div className="flex gap-4 overflow-x-auto pb-3 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+            {servicesLoading
+              ? [1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex-shrink-0 w-52 md:w-60 rounded-2xl bg-gray-50 border border-gray-100 animate-pulse">
+                  <div className="h-36 bg-gray-200 rounded-t-2xl" />
                   <div className="p-3 space-y-2">
                     <div className="h-3 bg-gray-200 rounded w-3/4" />
                     <div className="h-3 bg-gray-100 rounded w-1/2" />
                   </div>
                 </div>
-              ))}
+              ))
+              : popularServices.map((service) => (
+                <ServiceCarouselCard key={service.id} service={service} onNavigate={navigateToService} />
+              ))
+            }
+          </div>
+        </div>
+      </section>
+
+      {/* ── COUPONS / TODAY'S OFFERS ─────────────────────────────── */}
+      {(couponsLoading || !currentUser || coupons.length > 0) && (
+        <section className="bg-[#FEF0F5] py-10">
+          <div className="max-w-7xl mx-auto px-4 md:px-8">
+            <h2 className="text-xl font-extrabold text-[#111827] mb-5">Today's Offers</h2>
+            <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+              {couponsLoading && [1, 2, 3].map((i) => <CouponCardSkeleton key={i} />)}
+              {!couponsLoading && !currentUser && <GuestCouponTeaser />}
+              {!couponsLoading && currentUser && coupons.map((coupon) => {
+                const isCopied = copiedCode === coupon.code;
+                const discountLabel = coupon.type === 'percentage' ? `${coupon.value}% OFF` : `₹${coupon.value} OFF`;
+                return (
+                  <div key={coupon.id} className="flex-shrink-0 w-72 rounded-2xl overflow-hidden border border-[#E91E8C]/30 bg-white shadow-sm">
+                    <div className="h-1.5 bg-[#E91E8C]" />
+                    <div className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Tag size={13} className="text-[#E91E8C]" />
+                        <span className="font-bold text-sm text-[#111827] tracking-wide truncate">{coupon.code}</span>
+                        <span className="text-[10px] font-bold text-[#E91E8C] bg-[#E91E8C]/10 px-1.5 py-0.5 rounded-full flex-shrink-0">{discountLabel}</span>
+                      </div>
+                      <p className="text-xs text-gray-600 leading-snug line-clamp-2 mb-1">{coupon.description}</p>
+                      <p className="text-[10px] text-gray-400 mb-3">Min ₹{coupon.minOrder} · Till {coupon.validTo}</p>
+                      <button onClick={() => handleCopyCode(coupon.code)}
+                        className="w-full flex items-center justify-center gap-1.5 bg-[#111827] hover:bg-[#1f2937] text-white text-xs font-semibold py-2 rounded-xl transition-colors">
+                        {isCopied ? <><CheckCheck size={13} /> Copied!</> : <><Copy size={13} /> Copy Code</>}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ) : popularServices.length > 0 ? (
-            <PopularServicesSlider services={popularServices} onNavigate={navigateToService} />
-          ) : null}
+          </div>
         </section>
+      )}
 
-        {/* Fix #11 — Teaser grid (6 services) instead of full list */}
-        {servicesLoading ? (
-          <section className="mt-10 mb-8">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="h-20 rounded-2xl bg-white border border-gray-100 animate-pulse" />
-              ))}
-            </div>
-          </section>
-        ) : teaserServices.length > 0 ? (
-          <ServiceTeaserSection services={teaserServices} onNavigate={navigateToService} />
-        ) : null}
+      {/* ── FOOTER ───────────────────────────────────────────────── */}
+      <SiteFooter />
 
-      </div>
-
-      <div className="h-24 md:hidden" />
+      <div className="h-20 md:hidden" />
     </>
   );
 }

@@ -15,24 +15,7 @@ const navLinks = [
   { href: "/client/profile",  label: "Profile",  icon: User     },
 ];
 
-function CartIcon() {
-  const { itemCount } = useCart();
-  const router = useRouter();
-  return (
-    <button
-      onClick={() => router.push("/client/cart")}
-      className="relative p-2 rounded-full hover:bg-white/10 transition-colors"
-      aria-label="Cart"
-    >
-      <ShoppingCart size={22} className="text-white" />
-      {itemCount > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-[#e5849c] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
-          {itemCount > 99 ? "99+" : itemCount}
-        </span>
-      )}
-    </button>
-  );
-}
+
 
 function ProfileDropdown() {
   const router = useRouter();
@@ -112,20 +95,40 @@ function ProfileDropdown() {
   );
 }
 
+// ── Cart icon (dark theme for white navbar) ─────────────────
+function CartIconDark() {
+  const { itemCount } = useCart();
+  const router = useRouter();
+  return (
+    <button
+      onClick={() => router.push("/client/cart")}
+      className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+      aria-label="Cart"
+    >
+      <ShoppingCart size={22} className="text-[#111827]" />
+      {itemCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-[#E91E8C] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+          {itemCount > 99 ? "99+" : itemCount}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[#FEF0F5]">
 
       {/* ── Desktop top nav ─────────────────────────────────────── */}
-      <header className="hidden md:flex sticky top-0 z-50 h-16 bg-[#111827] shadow-lg items-center">
+      <header className="hidden md:flex sticky top-0 z-50 h-16 bg-white border-b border-gray-200 shadow-sm items-center">
         <div className="max-w-7xl mx-auto w-full flex items-center justify-between px-8">
 
           {/* Logo */}
-          <Link href="/client/home" className="flex items-center gap-0.5 select-none">
-            <span className="text-[#e5849c] font-extrabold text-2xl tracking-tight">Amara</span>
-            <span className="text-white font-extrabold text-2xl tracking-tight">Go</span>
+          <Link href="/client/home" className="flex items-center gap-0 select-none">
+            <span className="text-[#E91E8C] font-extrabold text-2xl tracking-tight">Amara</span>
+            <span className="text-[#111827] font-extrabold text-2xl tracking-tight">Go</span>
           </Link>
 
           {/* Nav links */}
@@ -137,12 +140,12 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                   key={href}
                   href={href}
                   className={`relative px-5 py-2 rounded-md text-sm font-medium transition-all duration-150 ${
-                    active ? "text-white" : "text-gray-400 hover:text-white hover:bg-white/10"
+                    active ? "text-[#111827]" : "text-gray-500 hover:text-[#111827] hover:bg-gray-50"
                   }`}
                 >
                   {label}
                   {active && (
-                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-[#e5849c] rounded-full" />
+                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-[#E91E8C] rounded-full" />
                   )}
                 </Link>
               );
@@ -151,20 +154,20 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
           {/* Right — Cart + Profile */}
           <div className="flex items-center gap-1">
-            <CartIcon />
+            <CartIconDark />
             <ProfileDropdown />
           </div>
         </div>
       </header>
 
       {/* ── Mobile top bar (logo + cart + profile) ──────────────── */}
-      <header className="md:hidden sticky top-0 z-50 h-14 bg-[#111827] flex items-center justify-between px-4 shadow-lg">
-        <Link href="/client/home" className="flex items-center gap-0.5 select-none">
-          <span className="text-[#e5849c] font-extrabold text-xl tracking-tight">Amara</span>
-          <span className="text-white font-extrabold text-xl tracking-tight">Go</span>
+      <header className="md:hidden sticky top-0 z-50 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 shadow-sm">
+        <Link href="/client/home" className="flex items-center gap-0 select-none">
+          <span className="text-[#E91E8C] font-extrabold text-xl tracking-tight">Amara</span>
+          <span className="text-[#111827] font-extrabold text-xl tracking-tight">Go</span>
         </Link>
         <div className="flex items-center gap-1">
-          <CartIcon />
+          <CartIconDark />
           <ProfileDropdown />
         </div>
       </header>
@@ -182,7 +185,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                 key={href}
                 href={href}
                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-150 ${
-                  active ? "text-[#e5849c]" : "text-gray-500"
+                  active ? "text-[#E91E8C]" : "text-gray-500"
                 }`}
               >
                 <Icon size={21} strokeWidth={active ? 2.5 : 1.8} />
