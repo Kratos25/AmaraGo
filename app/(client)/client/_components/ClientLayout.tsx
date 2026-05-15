@@ -12,7 +12,6 @@ const navLinks = [
   { href: "/client/home",     label: "Home",     icon: Home     },
   { href: "/client/services", label: "Services", icon: Scissors },
   { href: "/client/bookings", label: "Bookings", icon: Calendar },
-  { href: "/client/profile",  label: "Profile",  icon: User     },
 ];
 
 
@@ -102,12 +101,12 @@ function CartIconDark() {
   return (
     <button
       onClick={() => router.push("/client/cart")}
-      className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+      className="relative p-3 rounded-full bg-[#FFFFFF] transition-colors"
       aria-label="Cart"
     >
-      <ShoppingCart size={22} className="text-[#111827]" />
+      <ShoppingCart size={20} className="text-[#E8708E]" />
       {itemCount > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-[#E91E8C] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
+        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-[#D32F2F] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
           {itemCount > 99 ? "99+" : itemCount}
         </span>
       )}
@@ -119,15 +118,15 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <div className="min-h-screen bg-[#FEF0F5]">
+    <div className="min-h-screen bg-[#FFEAEF]">
 
       {/* ── Desktop top nav ─────────────────────────────────────── */}
-      <header className="hidden md:flex sticky top-0 z-50 h-16 bg-white border-b border-gray-200 shadow-sm items-center">
+      <header className="hidden md:flex sticky top-0 z-50 h-16 items-center bg-white/50 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto w-full flex items-center justify-between px-8">
 
           {/* Logo */}
           <Link href="/client/home" className="flex items-center gap-0 select-none">
-            <span className="text-[#E91E8C] font-extrabold text-2xl tracking-tight">Amara</span>
+            <span className="text-[#E8708E] font-extrabold text-2xl tracking-tight">Amara</span>
             <span className="text-[#111827] font-extrabold text-2xl tracking-tight">Go</span>
           </Link>
 
@@ -145,7 +144,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                 >
                   {label}
                   {active && (
-                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-[#E91E8C] rounded-full" />
+                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-10 h-0.5 bg-gradient-to-r from-[#E8708E] rounded-full" />
                   )}
                 </Link>
               );

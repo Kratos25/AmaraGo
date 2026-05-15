@@ -161,18 +161,18 @@ function CombinedSearchBar({
 
   return (
     <div ref={ref} className="relative">
-      <form onSubmit={handleSubmit}>
-        <div className="flex items-stretch bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden h-12">
+      <form onSubmit={handleSubmit} className='p-6 bg-white/50 backdrop-blur-xl rounded-[10px] border border-[#E8708E]/50'>
+        <div className="flex items-stretch bg-white rounded-md drop-shadow-xl border border-[#E8708E]/30 overflow-hidden h-16 p-2.5">
           {/* Location pill */}
           <button type="button" onClick={onLocationClick}
             className="hidden md:flex items-center gap-1.5 px-3 border-r border-gray-200 text-xs text-gray-600 hover:bg-gray-50 flex-shrink-0 whitespace-nowrap">
-            <MapPin size={13} className="text-[#E91E8C]" />
+            <MapPin size={16} className="text-[#E8708E]" />
             <span className="max-w-[120px] truncate">{userLocation}</span>
-            <ChevronDown size={11} className="text-gray-400" />
+            <ChevronDown size={16} className="text-gray-400" />
           </button>
           {/* Search input */}
           <div className="relative flex-1 flex items-center">
-            <Search className="absolute left-3 text-gray-400 pointer-events-none" size={16} />
+            <Search className="absolute left-3 text-[#E8708E] pointer-events-none" size={16} />
             <input
               type="search" value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -183,7 +183,7 @@ function CombinedSearchBar({
           </div>
           {/* Search button */}
           <button type="submit"
-            className="bg-[#E91E8C] hover:bg-[#c7166f] text-white text-sm font-bold px-5 flex items-center gap-1.5 transition-colors flex-shrink-0">
+            className="bg-[#E8708E] hover:bg-[#c7166f] text-white text-sm font-semibold px-8 rounded-md flex items-center gap-1.5 transition-colors flex-shrink-0">
             Search <ArrowRight size={15} />
           </button>
         </div>
@@ -231,7 +231,7 @@ function OffersCarousel({ currentUser, onBookNow, onProfile }: {
   const [idx, setIdx] = useState(0);
   const cards = [
     {
-      gradient: 'from-[#E91E8C] to-[#c7166f]',
+      gradient: 'from-[#AE002C] to-[#FA255A]',
       tag: 'New User',
       title: '₹200 off your\nfirst booking',
       sub: 'Use code WELCOME200 at checkout',
@@ -242,7 +242,7 @@ function OffersCarousel({ currentUser, onBookNow, onProfile }: {
     imgSrc: '/assets/offers/offer-new-user.jpg',
     },
     {
-      gradient: 'from-[#7c3aed] to-[#a855f7]',
+      gradient: 'from-[#692AFA] to-[#692AFA]',
       tag: 'Referrals',
       title: 'Refer a friend,\nearn ₹200 each',
       sub: 'Share & Earn when they book.',
@@ -253,7 +253,7 @@ function OffersCarousel({ currentUser, onBookNow, onProfile }: {
       imgSrc: '/assets/offers/offer-referral.jpg',
     },
     {
-      gradient: 'from-[#1e3a5f] to-[#1e2b45]',
+      gradient: 'from-[#202953] to-[#202953]',
       tag: 'Referrals',
       title: 'Earn points,\nunlock rewards',
       sub: '₹1 spent = 0.5 pts. Gold at 2000 pts.',
@@ -286,7 +286,7 @@ function OffersCarousel({ currentUser, onBookNow, onProfile }: {
           style={{ transform: `translateX(calc(-${idx * 100}% - ${idx * 16}px))` }}
         >
           {cards.map((card, i) => (
-            <div key={i} className={`flex-shrink-0 w-full md:w-[calc(33.333%-11px)] rounded-2xl bg-gradient-to-br ${card.gradient} relative overflow-hidden min-h-[160px]`}>
+            <div key={i} className={`flex-shrink-0 w-full md:w-96 rounded-[10px] bg-gradient-to-br ${card.gradient} relative overflow-hidden min-h-[160px]`}>
               {/* Offer card image → public/assets/offers/offer-{new-user,referral,rewards}.jpg (300×200px) */}
               <img src={card.imgSrc} alt={card.tag}
                 className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
@@ -798,22 +798,22 @@ export default function Home() {
       )}
 
       {/* ── HERO — light pink split layout ──────────────────────── */}
-      <section className="bg-[#FEF0F5]">
-        <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 md:py-16 flex flex-col md:flex-row items-center gap-8 md:gap-16">
+      <section className="bg-[#FFEAEF]">
+        <div className="w-full mx-auto px-4 md:pl-28 md:pr-0 py-10 md:py-0 flex flex-col md:flex-row items-center gap-8 md:gap-16">
           {/* Left column */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-[#111827] leading-tight mb-3">
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-[#111827] leading-tight mb-3">
               Self-care starts at your{' '}
-              <span className="text-[#E91E8C]">doorstep.</span>
+              <span className="text-[#E8708E]">doorstep<span className='text-black'>.</span></span>
             </h1>
-            <p className="text-gray-500 text-sm md:text-base mb-4">
+            <p className="text-[#805660] text-sm md:text-base mb-4">
               Book verified beauty experts in minutes
             </p>
             {/* Trust badges */}
             <div className="flex flex-wrap gap-x-4 gap-y-1 mb-6">
               {['Verified Professionals', 'Free rescheduling', 'Safe & hygienic', 'On-time guarantee'].map((b) => (
                 <span key={b} className="flex items-center gap-1 text-xs text-gray-600">
-                  <Check size={12} className="text-[#E91E8C]" strokeWidth={3} /> {b}
+                  <Check size={12} className="text-[#E8708E]" strokeWidth={3} /> {b}
                 </span>
               ))}
             </div>
@@ -826,7 +826,8 @@ export default function Home() {
             />
             {/* Social proof */}
             <div className="flex items-center gap-2 mt-5">
-              <Star size={14} className="fill-amber-400 text-amber-400" />
+              <Star size={16} className="text-amber-400" />
+              <span className='text-[#4B5563]'>4.8</span><span className='text-black'>&nbsp;·&nbsp;</span>
               {/* Social proof avatars → public/assets/social-proof/avatar-{1,2,3}.jpg (48×48px) */}
               <div className="flex -space-x-1">
                 {['/assets/social-proof/avatar-1.jpg', '/assets/social-proof/avatar-2.jpg', '/assets/social-proof/avatar-3.jpg'].map((src, i) => (
@@ -836,26 +837,19 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <span className="text-xs text-gray-500 font-medium">4.8 &nbsp;·&nbsp; 10,000+ bookings in Mumbai</span>
+              <span className="text-xs text-[#7F5660] font-medium">10,000+ bookings in Mumbai</span>
             </div>
           </div>
           {/* Right column — hero professional image
                → Replace placeholder: public/assets/hero/hero-professional.jpg
                → Recommended size: 800×1050px portrait */}
-          <div className="flex-shrink-0 w-full md:w-80 lg:w-96 h-72 md:h-[420px] rounded-3xl overflow-hidden relative bg-gradient-to-br from-pink-200 to-pink-100">
+          <div className="">
             <img
               src="/assets/hero/hero-professional.png"
               alt="AmaraGo beauty professional"
               className="w-full h-full object-cover"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
-            {/* Fallback shown while image is missing */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-8xl opacity-20">💆</span>
-            </div>
-            <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-semibold text-[#E91E8C] shadow">
-              AmaraGo
-            </div>
           </div>
         </div>
       </section>
