@@ -1,0 +1,119 @@
+'use client';
+
+import React from 'react';
+import { useRouter } from 'next/navigation';
+import { ChevronRight, Clock } from 'lucide-react';
+import { CartQtyButton } from '@/components/client/CartQtyButton';
+import { getEmoji } from '../_utils/emoji';
+
+interface PackageItem {
+  id: string;
+  name: string;
+  desc: string;
+  time: string;
+  price: string;
+  imageUrl?: string;
+  badge?: string;
+  originalPrice?: number;
+}
+
+function PackageCard({ pkg }: { pkg: PackageItem }) {
+  const { name, id, time, price, imageUrl, badge, originalPrice } = pkg;
+  const numPrice = parseFloat(price.replace(/[^0-9.]/g, ''));
+  const savings =
+    originalPrice && numPrice < originalPrice
+      ? Math.round(((originalPrice - numPrice) / originalPrice) * 100)
+      : null;
+
+  return (
+    <div className="flex-shrink-0 w-52 md:w-60 rounded-[10px] border border-gray-100 hover:shadow-lg transition-shadow overflow-hidden">
+      <div className="h-36 bg-gradient-to-br from-pink-100 to-pink-50 flex items-center justify-center relative overflow-hidden">
+        <img
+          src={
+            imageUrl ||
+            `/assets/packages/package-${name
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/(^-|-$)/g, '')}.jpg`
+          }
+          alt={name}
+          className="w-full h-full object-cover rounded-[10px]"
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+        {/* <span className="text-5xl opacity-30 absolute pointer-events-none">{getEmoji(name)}</span> */}
+        {badge && (
+          <span className="absolute top-2 right-2 bg-[#DB1F4E]/70 text-white text-[9px] font-bold px-2 py-1 rounded-[5px] z-10">
+            {badge}
+          </span>
+        )}
+      </div>
+      <div className="p-1">
+        <div className="flex items-center gap-1 text-gray-400 text-xs mb-2">
+            <div className="flex-1">
+                <p className="font-medium text-base text-[#111827] leading-tight line-clamp-2">{name}</p>
+            </div>
+            <div className="flex items-center gap-1 text-gray-400 text-xs mb-2">
+                <Clock size={11} /> {time}
+            </div>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="font-semibold text-base text-[#E8708E]">{price}</p>
+            {originalPrice && (
+              <div className="flex items-center gap-1">
+                <p className="text-sm text-gray-400 line-through">
+                  ₹{originalPrice.toLocaleString('en-IN')}
+                </p>
+                {savings && (
+                  <p className="text-sm text-[#16A34A] font-normal">Save {savings}%</p>
+                )}
+              </div>
+            )}
+          </div>
+          <CartQtyButton packageId={id} name={name} price={numPrice} duration={time} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface Props {
+  packages: PackageItem[];
+  loading: boolean;
+}
+
+export function PackagesSection({ packages, loading }: Props) {
+  const router = useRouter();
+
+  if (!loading && packages.length === 0) return null;
+
+  return (
+    <section className="bg-[#F7F2F6] py-10">
+      <div className="max-w-7xl mx-auto px-4 md:px-8">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-3xl font-medium text-[#111827] mb-5">Special Packages</h2>
+          <button
+            onClick={() => router.push('/client/services')}
+            className="text-sm font-semibold text-[#E91E8C] hover:underline flex items-center gap-0.5"
+          >
+            View all <ChevronRight size={14} />
+          </button>
+        </div>
+        <div className="flex gap-4 overflow-x-auto pb-3 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+          {loading
+            ? [1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex-shrink-0 w-52 md:w-60 rounded-2xl bg-gray-50 border border-gray-100 animate-pulse">
+                  <div className="h-36 bg-gray-200 rounded-t-2xl" />
+                  <div className="p-3 space-y-2">
+                    <div className="h-3 bg-gray-200 rounded w-3/4" />
+                    <div className="h-3 bg-gray-100 rounded w-1/2" />
+                  </div>
+                </div>
+              ))
+            : packages.map((pkg) => <PackageCard key={pkg.id} pkg={pkg} />)}
+        </div>
+      </div>
+    </section>
+  );
+}
