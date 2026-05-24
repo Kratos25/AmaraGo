@@ -8,6 +8,7 @@ import { auth, db } from '@/lib/firebase';
 import { couponsAPI, categoriesAPI, packagesAPI, servicesAPI } from '@/lib/api';
 import { useCart } from '@/config/context/CartContext';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation } from '@/config/context/LocationContext';
 
 // Modals / shared components
 import { ProviderRegistrationModal } from '@/app/(client)/client/_components/ProviderRegistrationModal';
@@ -48,9 +49,8 @@ export default function Home() {
 
   useCart();
 
-  // ── Location ──────────────────────────────────────────────────────────────
-  const [userLocation, setUserLocation]             = useState('Mumbai, Maharashtra');
-  const [isLoadingLocation, setIsLoadingLocation]   = useState(true);
+  // ── Location (from global context) ───────────────────────────────────────
+  const { location: userLocation, setLocation, ready: locationReady } = useLocation();
   const [showLocationPicker, setShowLocationPicker] = useState(false);
 
   // ── Auth / Provider ───────────────────────────────────────────────────────
@@ -168,32 +168,6 @@ export default function Home() {
     return () => unsub();
   }, [fetchCoupons]);
 
-  // ── Location detection ────────────────────────────────────────────────────
-  useEffect(() => {
-    setIsLoadingLocation(true);
-    if (!navigator.geolocation) {
-      setUserLocation('Mumbai, Maharashtra'); setIsLoadingLocation(false); return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const res = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&localityLanguage=en`
-          );
-          if (res.ok) {
-            const d = await res.json();
-            const suburb = d.locality || '';
-            const city   = d.city || d.principalSubdivision || 'Mumbai';
-            setUserLocation(suburb ? `${suburb}, ${city}` : city);
-          } else { setUserLocation('Mumbai, Maharashtra'); }
-        } catch { setUserLocation('Mumbai, Maharashtra'); }
-        setIsLoadingLocation(false);
-      },
-      () => { setUserLocation('Mumbai, Maharashtra'); setIsLoadingLocation(false); },
-      { timeout: 15000, maximumAge: 600000 }
-    );
-  }, []);
-
   // ── Provider handlers ─────────────────────────────────────────────────────
   const handleProviderButtonClick = () => {
     if (isProvider && isProviderApproved) { router.push('/provider'); return; }
@@ -245,7 +219,7 @@ export default function Home() {
       {showLocationPicker && (
         <LocationPickerModal
           current={userLocation}
-          onSelect={(loc) => { setUserLocation(loc); setShowLocationPicker(false); }}
+          onSelect={(loc) => { setLocation(loc, { confirmed: true }); setShowLocationPicker(false); }}
           onClose={() => setShowLocationPicker(false)}
         />
       )}
@@ -254,8 +228,8 @@ export default function Home() {
       <HeroSection
         allServicesForSearch={allServicesForSearch}
         navigateToService={navigateToService}
-        userLocation={userLocation}
-        isLoadingLocation={isLoadingLocation}
+        userLocation={!locationReady ? 'Detecting…' : userLocation}
+        isLoadingLocation={!locationReady}
         onLocationClick={() => setShowLocationPicker(true)}
       />
 
