@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Clock } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Clock } from 'lucide-react';
 import { CartQtyButton } from '@/components/client/CartQtyButton';
 import { getEmoji } from '../_utils/emoji';
 
@@ -85,6 +85,30 @@ interface Props {
 
 export function PackagesSection({ packages, loading }: Props) {
   const router = useRouter();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateArrows = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
+  useEffect(() => {
+    updateArrows();
+    const el = scrollRef.current;
+    el?.addEventListener('scroll', updateArrows, { passive: true });
+    window.addEventListener('resize', updateArrows);
+    return () => {
+      el?.removeEventListener('scroll', updateArrows);
+      window.removeEventListener('resize', updateArrows);
+    };
+  }, [packages]);
+
+  const scroll = (dir: 'left' | 'right') =>
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -280 : 280, behavior: 'smooth' });
 
   if (!loading && packages.length === 0) return null;
 
@@ -100,7 +124,24 @@ export function PackagesSection({ packages, loading }: Props) {
             View all <ChevronRight size={14} />
           </button>
         </div>
-        <div className="flex gap-4 overflow-x-auto pb-3 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+        <div className="relative">
+          {canScrollLeft && (
+            <button
+              onClick={() => scroll('left')}
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 hidden md:flex items-center justify-center hover:bg-gray-50 transition-colors"
+            >
+              <ChevronLeft size={16} className="text-gray-600" />
+            </button>
+          )}
+          {canScrollRight && (
+            <button
+              onClick={() => scroll('right')}
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 hidden md:flex items-center justify-center hover:bg-gray-50 transition-colors"
+            >
+              <ChevronRight size={16} className="text-gray-600" />
+            </button>
+          )}
+          <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-3 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
           {loading
             ? [1, 2, 3, 4].map((i) => (
                 <div key={i} className="flex-shrink-0 w-52 md:w-60 rounded-2xl bg-gray-50 border border-gray-100 animate-pulse">
@@ -112,6 +153,7 @@ export function PackagesSection({ packages, loading }: Props) {
                 </div>
               ))
             : packages.map((pkg) => <PackageCard key={pkg.id} pkg={pkg} />)}
+          </div>
         </div>
       </div>
     </section>

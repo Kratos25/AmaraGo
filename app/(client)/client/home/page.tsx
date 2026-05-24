@@ -245,9 +245,9 @@ export default function Home() {
         onNavigate={navigateToService}
       />
 
-      <MidBannerSection />
-
       <PopularServicesSection services={popularServices} loading={servicesLoading} />
+
+      <MidBannerSection />
 
       <CouponsSection
         coupons={coupons}

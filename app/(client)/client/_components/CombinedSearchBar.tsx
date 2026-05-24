@@ -47,17 +47,22 @@ export function CombinedSearchBar({ services, onNavigate, userLocation, onLocati
         onSubmit={handleSubmit}
         className="p-6 bg-white/50 backdrop-blur-xl rounded-[10px] border border-[#E8708E]/50"
       >
-        <div className="flex items-stretch bg-white rounded-md drop-shadow-xl border border-[#E8708E]/30 overflow-hidden h-16 p-2.5">
+      <div className="flex items-stretch bg-white rounded-md drop-shadow-xl border border-[#E8708E]/30 overflow-hidden h-16 p-2.5">
+          <div className="flex items-center gap-1 pl-2">
+            <MapPin size={20} className="text-[#E8708E]" />
+          </div>
           {/* Location pill — desktop only */}
-          <button
-            type="button"
-            onClick={onLocationClick}
-            className="hidden md:flex items-center gap-1.5 px-3 border-r border-gray-200 text-xs text-gray-600 hover:bg-gray-50 flex-shrink-0 whitespace-nowrap"
-          >
-            <MapPin size={16} className="text-[#E8708E]" />
-            <span className="max-w-[120px] truncate">{userLocation}</span>
-            <ChevronDown size={16} className="text-gray-400" />
-          </button>
+          <div className="hidden md:flex flex-col justify-center border-r border-gray-200 px-3 flex-shrink-0">
+            <span className="text-[12px] text-gray-400 mb-0.5 leading-none">location</span>
+            <button
+              type="button"
+              onClick={onLocationClick}
+              className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-[#E8708E] whitespace-nowrap"
+            >
+              <span className="max-w-[120px] truncate">{userLocation}</span>
+              <ChevronDown size={14} className="text-gray-400" />
+            </button>
+          </div>
 
           {/* Search input */}
           <div className="relative flex-1 flex items-center">
