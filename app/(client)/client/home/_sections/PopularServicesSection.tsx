@@ -15,9 +15,9 @@ function ServiceCarouselCard({
   onNavigate: (id: string) => void;
 }) {
   return (
-    <div className="flex-shrink-0 w-52 md:w-60 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+    <div className="flex-shrink-0 w-52 md:w-60 rounded-[10px] hover:shadow-lg transition-shadow overflow-hidden">
       <div
-        className="h-36 bg-gradient-to-br from-pink-100 to-pink-50 flex items-center justify-center relative overflow-hidden cursor-pointer"
+        className="h-36 bg-gradient-to-br from-pink-100 to-pink-50 flex items-center justify-center relative overflow-hidden"
         onClick={() => onNavigate(service.id)}
       >
         <img
@@ -29,7 +29,7 @@ function ServiceCarouselCard({
               .replace(/(^-|-$)/g, '')}.jpg`
           }
           alt={service.name}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover rounded-[10px]"
           loading="lazy"
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
@@ -40,21 +40,25 @@ function ServiceCarouselCard({
           </span>
         )}
       </div>
-      <div className="p-3">
-        <p
-          className="font-bold text-sm text-[#111827] leading-tight line-clamp-2 mb-1 cursor-pointer hover:text-[#E91E8C] transition-colors"
-          onClick={() => onNavigate(service.id)}
-        >
-          {service.name}
-        </p>
+      <div className="p-1 pt-4">
         <div className="flex items-center gap-1 text-gray-400 text-xs mb-2">
-          <Clock size={11} /> {service.duration}
+          <div className="flex-1">
+            <p
+              className="font-medium text-base text-[#111827] leading-tight line-clamp-2"
+              onClick={() => onNavigate(service.id)}
+            >
+            {service.name}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 text-gray-400 text-xs mb-2">
+              <Clock size={11} /> {service.duration}
+          </div>
         </div>
         <div className="flex items-center justify-between gap-2">
           <div>
-            <p className="font-extrabold text-base text-[#E91E8C]">{service.discountedPrice}</p>
+            <p className="font-semibold text-base text-[#E8708E]">{service.discountedPrice}</p>
             {service.discount && (
-              <p className="text-[10px] text-gray-400 line-through">{service.originalPrice}</p>
+              <p className="text-sm text-gray-400 line-through">{service.originalPrice}</p>
             )}
           </div>
           <CartQtyButton

@@ -48,7 +48,7 @@ function PackageCard({ pkg }: { pkg: PackageItem }) {
           </span>
         )}
       </div>
-      <div className="p-1">
+      <div className="p-1 pt-4">
         <div className="flex items-center gap-1 text-gray-400 text-xs mb-2">
             <div className="flex-1">
                 <p className="font-medium text-base text-[#111827] leading-tight line-clamp-2">{name}</p>

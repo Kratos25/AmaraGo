@@ -83,7 +83,7 @@ export default function Home() {
     return {
       id: s.id,
       name: s.name,
-      duration: `${s.duration} min`,
+      duration: `${s.duration}`,
       rating: s.rating ?? 0,
       discountedPrice: `₹${disc.toLocaleString('en-IN')}`,
       originalPrice:   `₹${base.toLocaleString('en-IN')}`,
