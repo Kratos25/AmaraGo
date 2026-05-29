@@ -4,10 +4,10 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Props {
-  categories: { name: string; icon: string }[];
+  categories?: { name: string; icon: string }[];
 }
 
-export function CategoriesSection({ categories }: Props) {
+export function CategoriesSection({ categories = [] }: Props) {
   const router = useRouter();
 
   if (categories.length === 0) return null;
