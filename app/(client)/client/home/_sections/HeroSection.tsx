@@ -70,10 +70,13 @@ export function HeroSection({
             <span className="text-[#4B5563]">4.8</span>
             <span className="text-black">&nbsp;·&nbsp;</span>
             <div className="flex -space-x-1">
-              {['/assets/social-proof/avatar-1.jpg', '/assets/social-proof/avatar-2.jpg', '/assets/social-proof/avatar-3.jpg'].map((src, i) => (
+              {[
+                'https://api.dicebear.com/9.x/lorelei/svg?seed=Priya&backgroundColor=ffd5dc',
+                'https://api.dicebear.com/9.x/lorelei/svg?seed=Ananya&backgroundColor=f9c4d2',
+                'https://api.dicebear.com/9.x/lorelei/svg?seed=Meera&backgroundColor=ffb3c6',
+              ].map((src, i) => (
                 <div key={i} className="w-6 h-6 rounded-full bg-pink-200 border-2 border-white overflow-hidden flex items-center justify-center text-xs">
-                  <img src={src} alt={`Customer ${i + 1}`} className="w-full h-full object-cover"
-                    onError={(e) => { const t = e.target as HTMLImageElement; t.style.display = 'none'; t.parentElement!.textContent = '👩'; }} />
+                  <img src={src} alt={`Customer ${i + 1}`} className="w-full h-full object-cover" />
                 </div>
               ))}
             </div>
@@ -81,9 +84,11 @@ export function HeroSection({
           </div>
         </div>
 
-        <div>
+        <div className="relative flex-shrink-0">
+          {/* pink radial gradient blob behind the image */}
+          <div className="absolute inset-0 -z-10 rounded-full bg-gradient-radial from-[#F9A8C9]/60 via-[#FFDCE9]/30 to-transparent blur-2xl scale-110" />
           <img src="/assets/hero/hero-professional.png" alt="AmaraGo beauty professional"
-            className="w-full h-full object-cover"
+            className="relative w-full h-full object-cover"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </div>
       </div>

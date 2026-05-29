@@ -6,6 +6,7 @@ import { ArrowLeft, Star, Clock, Heart, Share2, Tag, Sparkles, ShoppingCart, Che
 import { servicesAPI, type Service } from '@/lib/api';
 import { useCart } from '@/config/context/CartContext';
 import { useToast } from '@/hooks/use-toast';
+import { useWishlist } from '@/config/context/WishlistContext';
 
 export default function ServiceDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -15,8 +16,8 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
 
   const [service, setService] = useState<Service | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isFavorite, setIsFavorite] = useState(false);
   const [added, setAdded] = useState(false);
+  const { isWishlisted, toggleWishlist } = useWishlist();
 
   useEffect(() => {
     servicesAPI.getById(id)
@@ -75,10 +76,10 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
           </button>
           <div className="flex gap-3">
             <button
-              onClick={() => setIsFavorite(!isFavorite)}
+              onClick={() => toggleWishlist(id)}
               className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
             >
-              <Heart size={17} className={`transition-colors ${isFavorite ? 'fill-[#e5849c] text-[#e5849c]' : 'text-white'}`} />
+              <Heart size={17} className={`transition-colors ${isWishlisted(id) ? 'fill-[#e5849c] text-[#e5849c]' : 'text-white'}`} />
             </button>
             <button className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
               <Share2 size={17} className="text-white" />

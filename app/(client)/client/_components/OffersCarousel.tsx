@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { User } from 'firebase/auth';
 
@@ -12,6 +12,14 @@ interface Props {
 
 export function OffersCarousel({ currentUser, onBookNow, onProfile }: Props) {
   const [idx, setIdx] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const cards = [
     {
@@ -51,25 +59,29 @@ export function OffersCarousel({ currentUser, onBookNow, onProfile }: Props) {
 
   return (
     <div className="relative">
-      {/* Arrow buttons */}
-      <button
-        onClick={prev}
-        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
-      >
-        <ChevronLeft size={16} className="text-gray-600" />
-      </button>
-      <button
-        onClick={next}
-        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
-      >
-        <ChevronRight size={16} className="text-gray-600" />
-      </button>
+      {/* Arrow buttons — mobile only */}
+      {isMobile && (
+        <>
+          <button
+            onClick={prev}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
+          >
+            <ChevronLeft size={16} className="text-gray-600" />
+          </button>
+          <button
+            onClick={next}
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
+          >
+            <ChevronRight size={16} className="text-gray-600" />
+          </button>
+        </>
+      )}
 
       {/* Cards container */}
       <div className="overflow-hidden">
         <div
           className="flex transition-transform duration-300 ease-in-out gap-4"
-          style={{ transform: `translateX(calc(-${idx * 100}% - ${idx * 18}px))` }}
+          style={isMobile ? { transform: `translateX(calc(-${idx * 100}% - ${idx * 18}px))` } : undefined}
         >
           {cards.map((card, i) => (
             <div
@@ -107,27 +119,19 @@ export function OffersCarousel({ currentUser, onBookNow, onProfile }: Props) {
       </div>
 
       {/* Dot indicators — mobile only */}
-      <div className="flex justify-center gap-1.5 mt-3 md:hidden">
-        {cards.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setIdx(i)}
-            className={`w-1.5 h-1.5 rounded-full transition-all ${
-              i === idx ? 'bg-[#E91E8C] w-4' : 'bg-gray-300'
-            }`}
-          />
-        ))}
-      </div>
-
-      {/* Desktop: override transform to show all 3 side by side */}
-      <style jsx>{`
-        @media (min-width: 768px) {
-          div[style*="translateX"] {
-            transform: none !important;
-            flex-wrap: nowrap;
-          }
-        }
-      `}</style>
+      {isMobile && (
+        <div className="flex justify-center gap-1.5 mt-3">
+          {cards.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setIdx(i)}
+              className={`w-1.5 h-1.5 rounded-full transition-all ${
+                i === idx ? 'bg-[#E91E8C] w-4' : 'bg-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

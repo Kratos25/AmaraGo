@@ -5,16 +5,19 @@ import { CartProvider } from "@/config/context/CartContext";
 import { SearchVisibilityProvider } from "@/config/context/SearchVisibilityContext";
 import { LocationProvider } from "@/config/context/LocationContext";
 import { LocationGateModal } from "./client/_components/LocationGateModal";
+import { WishlistProvider } from "@/config/context/WishlistContext";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <LocationProvider>
-      <CartProvider>
-        <SearchVisibilityProvider>
-          <LocationGateModal />
-          <ClientLayout>{children}</ClientLayout>
-        </SearchVisibilityProvider>
-      </CartProvider>
+      <WishlistProvider>
+        <CartProvider>
+          <SearchVisibilityProvider>
+            <LocationGateModal />
+            <ClientLayout>{children}</ClientLayout>
+          </SearchVisibilityProvider>
+        </CartProvider>
+      </WishlistProvider>
     </LocationProvider>
   );
 }

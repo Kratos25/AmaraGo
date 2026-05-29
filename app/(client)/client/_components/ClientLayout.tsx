@@ -11,9 +11,9 @@ import { useSearchVisibility } from '@/config/context/SearchVisibilityContext';
 import { Service } from '@/app/(client)/client/home/_types';
 
 const navLinks = [
-  { href: "/client/home",     label: "Home",     icon: Home     },
-  { href: "/client/services", label: "Services", icon: Scissors },
-  { href: "/client/bookings", label: "Bookings", icon: Calendar },
+  { href: "/client/home",      label: "Home",      icon: Home     },
+  { href: "/client/services",  label: "Services",  icon: Scissors },
+  { href: "/client/bookings",  label: "Bookings",  icon: Calendar },
 ];
 
 
@@ -230,15 +230,25 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { heroSearchVisible, navServices, navigateToService } = useSearchVisibility();
 
-  // Only show the navbar search on the home page
   const isHomePage = pathname === '/client/home';
-  const showNavSearch = isHomePage && !heroSearchVisible;
+  // On home: show when hero search scrolls out of view. On all other pages: always show.
+  const showNavSearch = isHomePage ? !heroSearchVisible : true;
+
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#FFEAEF]">
 
       {/* ── Desktop top nav ─────────────────────────────────────── */}
-      <header className="hidden md:flex sticky top-0 z-50 h-16 items-center bg-white/50 backdrop-blur-xl">
+      <header className={`hidden md:flex sticky top-0 z-50 h-16 items-center transition-all duration-300 ${
+        scrolled ? 'bg-white/70 backdrop-blur-xl shadow-sm' : 'bg-transparent'
+      }`}>
         <div className="max-w-7xl mx-auto w-full flex items-center justify-between px-8">
 
           {/* Logo — shrinks slightly when search is present */}
@@ -286,7 +296,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ── Mobile top bar ──────────────────────────────────────── */}
-      <header className="md:hidden sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+      <header className={`md:hidden sticky top-0 z-50 transition-all duration-300 ${
+        scrolled ? 'bg-white/70 backdrop-blur-xl border-b border-white/30 shadow-sm' : 'bg-transparent border-b border-transparent'
+      }`}>
         {/* Row 1: logo + cart + profile — always visible */}
         <div className="h-14 flex items-center justify-between px-4">
           <Link href="/client/home" className="flex items-center gap-0 select-none">

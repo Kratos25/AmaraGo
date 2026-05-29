@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Clock } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Clock } from 'lucide-react';
 import { CartQtyButton } from '@/components/client/CartQtyButton';
 import { getEmoji } from '../_utils/emoji';
 import { Service } from '../_types';
@@ -80,8 +80,33 @@ interface Props {
 
 export function PopularServicesSection({ services, loading }: Props) {
   const router = useRouter();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateArrows = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
+  useEffect(() => {
+    updateArrows();
+    const el = scrollRef.current;
+    el?.addEventListener('scroll', updateArrows, { passive: true });
+    window.addEventListener('resize', updateArrows);
+    return () => {
+      el?.removeEventListener('scroll', updateArrows);
+      window.removeEventListener('resize', updateArrows);
+    };
+  }, [services]);
+
+  const scroll = (dir: 'left' | 'right') =>
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -280 : 280, behavior: 'smooth' });
+
   return (
-    <section className="bg-white py-10">
+    <section className="bg-[#F7F2F6] py-10">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-xl font-extrabold text-[#111827]">Popular Services</h2>
@@ -92,7 +117,24 @@ export function PopularServicesSection({ services, loading }: Props) {
             View all <ChevronRight size={14} />
           </button>
         </div>
-        <div className="flex gap-4 overflow-x-auto pb-3 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+        <div className="relative">
+          {canScrollLeft && (
+            <button
+              onClick={() => scroll('left')}
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 hidden md:flex items-center justify-center hover:bg-gray-50 transition-colors"
+            >
+              <ChevronLeft size={16} className="text-gray-600" />
+            </button>
+          )}
+          {canScrollRight && (
+            <button
+              onClick={() => scroll('right')}
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 hidden md:flex items-center justify-center hover:bg-gray-50 transition-colors"
+            >
+              <ChevronRight size={16} className="text-gray-600" />
+            </button>
+          )}
+          <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-3 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
           {loading
             ? [1, 2, 3, 4].map((i) => (
                 <div key={i} className="flex-shrink-0 w-52 md:w-60 rounded-2xl bg-gray-50 border border-gray-100 animate-pulse">
@@ -106,6 +148,7 @@ export function PopularServicesSection({ services, loading }: Props) {
             : services.map((service) => (
                 <ServiceCarouselCard key={service.id} service={service} onNavigate={router.push.bind(router)} />
               ))}
+          </div>
         </div>
       </div>
     </section>

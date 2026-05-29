@@ -532,3 +532,17 @@ export const loyaltyAPI = {
   getMe: () => api.get('/loyalty/me'),
   getHistory: () => api.get('/loyalty/history'),
 };
+
+// ─── Wishlist ─────────────────────────────────────────────────────────────────
+
+export const wishlistAPI = {
+  /** Fetch the current user's wishlist (returns { wishlist: string[] }) */
+  get: () => api.get<{ wishlist: string[] }>('/wishlist'),
+  /** Add a service — idempotent */
+  add: (serviceId: string) => api.post<{ wishlist: string[] }>(`/wishlist/${serviceId}`),
+  /** Remove a service — idempotent */
+  remove: (serviceId: string) => api.delete<{ wishlist: string[] }>(`/wishlist/${serviceId}`),
+  /** Merge locally-stored guest IDs into the server wishlist after login */
+  sync: (serviceIds: string[]) =>
+    api.post<{ wishlist: string[] }>('/wishlist/sync', { service_ids: serviceIds }),
+};

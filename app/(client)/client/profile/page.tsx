@@ -150,7 +150,7 @@ export default function Profile() {
       items: [
         { icon: <MapPin size={17} />, label: 'Saved Addresses', sub: `${addresses.length} address${addresses.length !== 1 ? 'es' : ''} saved`, action: () => setShowAddresses(true) },
         { icon: <Gift size={17} />,   label: 'Refer & Earn',    sub: 'Get ₹200 per referral', badge: 'NEW' },
-        { icon: <Heart size={17} />,  label: 'Wishlist',        sub: '3 saved services' },
+        { icon: <Heart size={17} />,  label: 'Wishlist',        sub: '3 saved services', href: '/client/wishlist' },
       ],
     },
     {
