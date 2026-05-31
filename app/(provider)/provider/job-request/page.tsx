@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
+import { bookingsAPI, type Booking } from '@/lib/api';
 import {
   ArrowLeft, MapPin, Clock, Check, X, Star,
   ChevronRight,
@@ -22,10 +24,23 @@ import ProviderLayout from '../_components/ProviderLayout';
 
 const TIMER_SECONDS = 60;
 
-export default function JobRequest() {
+function JobRequestInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const bookingId = searchParams.get('id') ?? '';
   const { toast } = useToast();
   const [timeLeft, setTimeLeft] = useState(TIMER_SECONDS);
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [loadingBooking, setLoadingBooking] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    if (!bookingId) { setLoadingBooking(false); return; }
+    bookingsAPI.getById(bookingId)
+      .then(({ data }) => setBooking(data))
+      .catch(() => toast({ title: 'Failed to load booking', variant: 'destructive' }))
+      .finally(() => setLoadingBooking(false));
+  }, [bookingId]);
 
   useEffect(() => {
     if (timeLeft === 0) {
@@ -36,14 +51,30 @@ export default function JobRequest() {
     return () => clearTimeout(timer);
   }, [timeLeft, router]);
 
-  const handleAccept = () => {
-    toast({ title: 'Job Accepted! 🎉', description: "You've been assigned to this booking." });
-    router.push('/provider/job-details');
+  const handleAccept = async () => {
+    if (!bookingId || actionLoading) return;
+    setActionLoading(true);
+    try {
+      await bookingsAPI.acceptOffer(bookingId);
+      toast({ title: 'Job Accepted! 🎉', description: "You've been assigned to this booking." });
+      router.push(`/provider/job-details?id=${bookingId}`);
+    } catch {
+      toast({ title: 'Failed to accept job', variant: 'destructive' });
+      setActionLoading(false);
+    }
   };
 
-  const handleReject = () => {
-    toast({ title: 'Job Declined', description: 'The request has been passed to another provider.' });
-    router.push('/provider');
+  const handleReject = async () => {
+    if (!bookingId || actionLoading) return;
+    setActionLoading(true);
+    try {
+      await bookingsAPI.rejectOffer(bookingId);
+      toast({ title: 'Job Declined', description: 'The request has been passed to another provider.' });
+      router.push('/provider');
+    } catch {
+      toast({ title: 'Failed to reject job', variant: 'destructive' });
+      setActionLoading(false);
+    }
   };
 
   const circumference = 2 * Math.PI * 44;
@@ -122,11 +153,11 @@ export default function JobRequest() {
                         </span>
                         <span className="text-[10px] font-bold text-[#C84B31] tracking-widest uppercase">Incoming Request</span>
                       </div>
-                      <h2 className="font-bold text-[22px] md:text-[24px] text-[#1A1A1A] tracking-tight">Party Makeup</h2>
-                      <p className="text-[13px] text-[#9CA3AF] mt-0.5">Full glam look for special occasion</p>
+                      <h2 className="font-bold text-[22px] md:text-[24px] text-[#1A1A1A] tracking-tight">{loadingBooking ? 'Loading…' : (booking?.service_name ?? 'Job Request')}</h2>
+                      <p className="text-[13px] text-[#9CA3AF] mt-0.5">{booking?.notes ?? 'New service request'}</p>
                     </div>
                     <Badge variant="outline" className="text-[11px] font-semibold border-[#FDDDD5] bg-[#FFF0EC] text-[#C84B31] shrink-0 mt-1">
-                      Bridal & Makeup
+                      {booking?.payment_method ?? 'Service'}
                     </Badge>
                   </div>
 
@@ -135,7 +166,7 @@ export default function JobRequest() {
                     {[
                       { Icon: Clock,  label: 'Duration',  value: '90 min' },
                       { Icon: MapPin, label: 'Distance',  value: '2.5 km' },
-                      { Icon: Clock,  label: 'Scheduled', value: '6:00 PM' },
+                      { Icon: Clock,  label: 'Scheduled', value: booking ? `${booking.date}, ${booking.time}` : '—' },
                     ].map(({ Icon, label, value }) => (
                       <div key={label} className="flex flex-col items-center text-center gap-1.5">
                         <div className="w-9 h-9 rounded-xl bg-[#FFF0EC] flex items-center justify-center">
@@ -158,10 +189,10 @@ export default function JobRequest() {
                       👩
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-[15px] text-[#1A1A1A]">Ananya Singh</p>
+                      <p className="font-semibold text-[15px] text-[#1A1A1A]">{booking?.client_name ?? '—'}</p>
                       <div className="flex items-center gap-1 mt-0.5 text-[#9CA3AF]">
                         <MapPin className="w-3 h-3 shrink-0" />
-                        <span className="text-[12px] truncate">Bandra West, Mumbai</span>
+                        <span className="text-[12px] truncate">{booking?.address ?? '—'}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 bg-amber-50 border border-amber-100 px-2.5 py-1.5 rounded-xl shrink-0">
@@ -169,12 +200,12 @@ export default function JobRequest() {
                       <span className="text-[12px] font-bold text-amber-700">4.8</span>
                     </div>
                   </div>
+                  {booking?.notes && (
                   <div className="bg-[#F5F4F2] rounded-xl p-3.5 border border-[#EBEBEB]">
                     <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-1.5">Note from client</p>
-                    <p className="text-[13px] text-[#6B7280] leading-relaxed">
-                      Need makeup for engagement party. Please bring nude and pink shades.
-                    </p>
+                    <p className="text-[13px] text-[#6B7280] leading-relaxed">{booking.notes}</p>
                   </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -188,13 +219,20 @@ export default function JobRequest() {
                     <div className="w-11 h-11 rounded-full bg-white border border-[#FDDDD5] flex items-center justify-center shadow-sm">
                       <MapPin className="w-5 h-5 text-[#C84B31]" />
                     </div>
-                    <p className="text-[14px] font-medium text-[#6B7280]">Bandra West, Mumbai</p>
-                    <p className="text-[11px] text-[#C84B31]/70">2.5 km from your location</p>
+                    <p className="text-[14px] font-medium text-[#6B7280]">{booking?.address ?? '—'}</p>
+                    <p className="text-[11px] text-[#C84B31]/70">Tap to open in Maps</p>
                   </div>
-                  <button className="w-full flex items-center justify-between px-5 py-3.5 border-t border-[#EBEBEB] hover:bg-[#F5F4F2] transition-colors group">
+                  {booking?.latitude && booking?.longitude ? (
+                  <button onClick={() => window.open(`https://maps.google.com/?q=${booking.latitude},${booking.longitude}`)} className="w-full flex items-center justify-between px-5 py-3.5 border-t border-[#EBEBEB] hover:bg-[#F5F4F2] transition-colors group">
                     <span className="text-[13px] font-semibold text-[#C84B31]">Open in Maps</span>
                     <ChevronRight className="w-4 h-4 text-[#C84B31] group-hover:translate-x-0.5 transition-transform" />
                   </button>
+                  ) : (
+                  <button onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(booking?.address ?? '')}`)} className="w-full flex items-center justify-between px-5 py-3.5 border-t border-[#EBEBEB] hover:bg-[#F5F4F2] transition-colors group">
+                    <span className="text-[13px] font-semibold text-[#C84B31]">Open in Maps</span>
+                    <ChevronRight className="w-4 h-4 text-[#C84B31] group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                  )}
                 </CardContent>
               </Card>
 
@@ -211,7 +249,7 @@ export default function JobRequest() {
                 <TimerRing size="lg" />
                 <div className="flex-1 min-w-0">
                   <p className="text-white/60 text-[11px] font-medium mb-1">Estimated Earnings</p>
-                  <p className="text-white font-bold text-[42px] tracking-tight leading-none">₹1,999</p>
+                  <p className="text-white font-bold text-[42px] tracking-tight leading-none">₹{booking ? Math.round(booking.total_price * (1 - 0.15)).toLocaleString('en-IN') : '—'}</p>
                   <span className="inline-flex items-center gap-1 text-white/80 bg-white/15 text-[11px] font-medium px-2.5 py-1 rounded-full mt-3">
                     After platform fee
                   </span>
@@ -238,11 +276,11 @@ export default function JobRequest() {
                   <p className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-3">Job Summary</p>
                   <div className="space-y-3">
                     {[
-                      { label: 'Service', value: 'Party Makeup' },
-                      { label: 'Date', value: 'Today, 6:00 PM' },
-                      { label: 'Duration', value: '90 minutes' },
-                      { label: 'Location', value: 'Bandra West, Mumbai' },
-                      { label: 'Client Rating', value: '⭐ 4.8' },
+                      { label: 'Service',  value: booking?.service_name ?? '—' },
+                      { label: 'Date',     value: booking ? `${booking.date}, ${booking.time}` : '—' },
+                      { label: 'Address',  value: booking?.address ?? '—' },
+                      { label: 'Client',   value: booking?.client_name ?? '—' },
+                      { label: 'Payment',  value: booking?.payment_method ?? '—' },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex items-center justify-between">
                         <span className="text-[12px] text-[#9CA3AF]">{label}</span>
@@ -251,7 +289,7 @@ export default function JobRequest() {
                     ))}
                     <div className="pt-3 border-t border-[#EBEBEB] flex items-center justify-between">
                       <span className="text-[13px] font-semibold text-[#1A1A1A]">Total Earnings</span>
-                      <span className="text-[15px] font-bold text-[#C84B31]">₹1,999</span>
+                      <span className="text-[15px] font-bold text-[#C84B31]">₹{booking ? Math.round(booking.total_price * 0.85).toLocaleString('en-IN') : '—'}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -273,7 +311,7 @@ export default function JobRequest() {
               <TimerRing size="sm" />
               <div className="flex-1 min-w-0">
                 <p className="text-white/60 text-[10px] font-medium mb-0.5">Estimated Earnings</p>
-                <p className="text-white font-bold text-[32px] tracking-tight leading-none">₹1,999</p>
+                <p className="text-white font-bold text-[32px] tracking-tight leading-none">₹{booking ? Math.round(booking.total_price * 0.85).toLocaleString('en-IN') : '—'}</p>
                 <span className="inline-flex text-white/80 bg-white/15 text-[10px] font-medium px-2 py-0.5 rounded-full mt-1.5">
                   After platform fee
                 </span>
@@ -289,4 +327,8 @@ export default function JobRequest() {
       </div>
     </ProviderLayout>
   );
+}
+
+export default function JobRequest() {
+  return <Suspense fallback={null}><JobRequestInner /></Suspense>;
 }

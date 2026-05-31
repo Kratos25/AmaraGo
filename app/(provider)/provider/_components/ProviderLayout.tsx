@@ -117,8 +117,8 @@ function ProviderNotifPanel({
           <div className="divide-y divide-[#EBEBEB]">
             {notifications.map((n) => {
               const cfg = ICON_CFG[n.type] ?? ICON_CFG.new_booking;
-              const href = n.type === 'new_booking' || n.type === 'booking_cancelled'
-                ? '/provider/my-jobs'
+              const href = n.type === 'job_offer' && n.reference_id
+                ? `/provider/job-request?id=${n.reference_id}`
                 : '/provider/my-jobs';
               return (
                 <button

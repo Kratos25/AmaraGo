@@ -167,6 +167,8 @@ export interface ProviderProfile {
   total_jobs: number;
   is_online: boolean;
   is_approved: boolean;
+  is_suspended: boolean;
+  last_seen_at?: string;
   commission_rate: number;
   created_at?: string;
   documents?: ProviderDocuments;
@@ -510,6 +512,9 @@ export const providersAPI = {
 
   setApproval: (uid: string, approved: boolean, reason?: string) =>
     api.put(`/providers/${uid}/approval`, { approved, reason }),
+
+  suspend: (uid: string, suspended: boolean, reason?: string) =>
+    api.put(`/providers/${uid}/suspend`, { suspended, reason }),
 };
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
