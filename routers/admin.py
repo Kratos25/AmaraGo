@@ -387,3 +387,77 @@ async def get_notifications(
         reverse=True,
     )
     return notifications
+
+
+# ── Platform Config ───────────────────────────────────────────────────────────
+
+_CONFIG_DOC = "_config/platform"
+_CONFIG_DEFAULTS = {
+    "convenience_fee": 99.0,
+    "original_convenience_fee": 99.0,   # shown as strikethrough when fee is 0
+    "commission_rate_default": 15.0,
+}
+
+
+class PlatformConfig(BaseModel):
+    convenience_fee: float = 99.0
+    original_convenience_fee: float = 99.0
+    commission_rate_default: float = 15.0
+
+
+class UpdatePlatformConfig(BaseModel):
+    convenience_fee: float | None = None
+    original_convenience_fee: float | None = None
+    commission_rate_default: float | None = None
+
+
+@router.get("/config", response_model=PlatformConfig)
+async def get_platform_config(
+    _admin: CurrentUser = Depends(require_role("admin")),
+):
+    db = get_db()
+    doc = db.document(_CONFIG_DOC).get()
+    data = {**_CONFIG_DEFAULTS, **(doc.to_dict() if doc.exists else {})}
+    return PlatformConfig(**data)
+
+
+@router.put("/config", response_model=PlatformConfig)
+async def update_platform_config(
+    body: UpdatePlatformConfig,
+    _admin: CurrentUser = Depends(require_role("admin")),
+):
+    db = get_db()
+    updates: dict = {}
+    if body.convenience_fee is not None:
+        if body.convenience_fee < 0:
+            raise HTTPException(status_code=422, detail="convenience_fee cannot be negative.")
+        updates["convenience_fee"] = body.convenience_fee
+    if body.original_convenience_fee is not None:
+        if body.original_convenience_fee < 0:
+            raise HTTPException(status_code=422, detail="original_convenience_fee cannot be negative.")
+        updates["original_convenience_fee"] = body.original_convenience_fee
+    if body.commission_rate_default is not None:
+        if not (0 <= body.commission_rate_default <= 100):
+            raise HTTPException(status_code=422, detail="commission_rate_default must be 0–100.")
+        updates["commission_rate_default"] = body.commission_rate_default
+
+    if updates:
+        db.document(_CONFIG_DOC).set(updates, merge=True)
+
+    doc = db.document(_CONFIG_DOC).get()
+    data = {**_CONFIG_DEFAULTS, **(doc.to_dict() if doc.exists else {})}
+    return PlatformConfig(**data)
+
+
+# ── Public config (no auth — used by checkout page) ──────────────────────────
+
+@router.get("/config/public")
+async def get_public_config():
+    """Returns only the fields the client frontend needs (no auth required)."""
+    db = get_db()
+    doc = db.document(_CONFIG_DOC).get()
+    data = {**_CONFIG_DEFAULTS, **(doc.to_dict() if doc.exists else {})}
+    return {
+        "convenience_fee": data["convenience_fee"],
+        "original_convenience_fee": data["original_convenience_fee"],
+    }

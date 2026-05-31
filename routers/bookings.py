@@ -33,7 +33,19 @@ from schemas.booking import (
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
 
-CONVENIENCE_FEE = 99.0
+_CONFIG_DOC = "_config/platform"
+_DEFAULT_CONVENIENCE_FEE = 99.0
+
+
+def _get_convenience_fee(db) -> float:
+    """Read convenience_fee from Firestore config; fall back to 99 if not set."""
+    try:
+        doc = db.document(_CONFIG_DOC).get()
+        if doc.exists:
+            return float(doc.to_dict().get("convenience_fee", _DEFAULT_CONVENIENCE_FEE))
+    except Exception:
+        pass
+    return _DEFAULT_CONVENIENCE_FEE
 
 
 # ── Paginated response model ───────────────────────────────────────────────────
@@ -323,7 +335,7 @@ def _doc_to_booking(doc) -> BookingResponse:
         coupon_code=d.get("coupon_code"),
         base_price=d.get("base_price", 0),
         discount_amount=d.get("discount_amount", 0),
-        convenience_fee=d.get("convenience_fee", CONVENIENCE_FEE),
+        convenience_fee=d.get("convenience_fee", _DEFAULT_CONVENIENCE_FEE),
         total_price=d.get("total_price", 0),
         status=d.get("status", "pending"),
         notes=d.get("notes"),
@@ -384,7 +396,8 @@ async def create_multi_booking(
             package_ids.append(cart_item.package_id)
 
     discount = _apply_coupon(db, body.coupon_code, base_total, current_user.uid)
-    total    = round(base_total - discount + CONVENIENCE_FEE, 2)
+    convenience_fee = _get_convenience_fee(db)
+    total    = round(base_total - discount + convenience_fee, 2)
 
     # Build human-readable summary name
     names = [i["name"] for i in resolved_items]
@@ -420,7 +433,7 @@ async def create_multi_booking(
         "coupon_code":    body.coupon_code,
         "base_price":     base_total,
         "discount_amount": discount,
-        "convenience_fee": CONVENIENCE_FEE,
+        "convenience_fee": convenience_fee,
         "total_price":    total,
         "status":         "pending",
         "notes":          body.notes,
@@ -483,7 +496,8 @@ async def create_booking(
     address = _resolve_address(db, body.address_id, body.address_text, current_user.uid)
     base_price, service_name = _get_service_price(db, body.service_id, body.package_id)
     discount = _apply_coupon(db, body.coupon_code, base_price, current_user.uid)
-    total = round(base_price - discount + CONVENIENCE_FEE, 2)
+    convenience_fee = _get_convenience_fee(db)
+    total = round(base_price - discount + convenience_fee, 2)
 
     # Fetch client name/phone for display
     user_doc = db.collection("users").document(current_user.uid).get()
@@ -509,7 +523,7 @@ async def create_booking(
         "coupon_code": body.coupon_code,
         "base_price": base_price,
         "discount_amount": discount,
-        "convenience_fee": CONVENIENCE_FEE,
+        "convenience_fee": convenience_fee,
         "total_price": total,
         "status": "pending",
         "notes": body.notes,
