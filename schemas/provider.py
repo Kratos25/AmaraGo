@@ -64,6 +64,8 @@ class ProviderProfileResponse(ProviderProfileBase):
     total_jobs: int = 0
     is_online: bool = False
     is_approved: bool = False
+    is_suspended: bool = False
+    last_seen_at: Optional[str] = None
     commission_rate: float = 15.0
     created_at: Optional[datetime] = None
     documents: Optional[ProviderDocuments] = None

@@ -63,6 +63,8 @@ def _build_profile(uid: str, user_data: dict, provider_data: dict) -> ProviderPr
         total_jobs=provider_data.get("total_jobs", 0),
         is_online=provider_data.get("is_online", False),
         is_approved=provider_data.get("is_approved", False),
+        is_suspended=provider_data.get("is_suspended", False),
+        last_seen_at=provider_data.get("last_seen_at"),
         commission_rate=provider_data.get("commission_rate", 15.0),
         created_at=user_data.get("created_at"),
         documents=documents,
@@ -250,9 +252,11 @@ async def toggle_online(
     current_user: CurrentUser = Depends(require_role("service_provider")),
 ):
     db = get_db()
-    db.collection("provider_profiles").document(current_user.uid).update(
-        {"is_online": body.is_online}
-    )
+    update_data: dict = {"is_online": body.is_online}
+    if not body.is_online:
+        from datetime import datetime, timezone
+        update_data["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    db.collection("provider_profiles").document(current_user.uid).update(update_data)
     user_doc = db.collection("users").document(current_user.uid).get()
     prov_doc = db.collection("provider_profiles").document(current_user.uid).get()
     if not user_doc.exists or not prov_doc.exists:
@@ -504,4 +508,53 @@ async def set_provider_approval(
         "uid": uid,
         "is_approved": body.approved,
         "message": "Provider approved." if body.approved else "Provider rejected.",
+    }
+
+
+# ── Admin: suspend / reactivate ───────────────────────────────────────────────
+
+class SuspendRequest(BaseModel):
+    suspended: bool
+    reason: Optional[str] = None
+
+
+@router.put("/{uid}/suspend")
+async def suspend_provider(
+    uid: str,
+    body: SuspendRequest,
+    _admin: CurrentUser = Depends(require_role("admin")),
+):
+    from datetime import datetime, timezone
+    db = get_db()
+    ref = db.collection("provider_profiles").document(uid)
+    if not ref.get().exists:
+        raise HTTPException(status_code=404, detail="Provider not found.")
+
+    ref.update({"is_suspended": body.suspended})
+
+    # Notify provider
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if body.suspended:
+            title = "Account Suspended"
+            msg = "Your account has been suspended by the admin." + (f" Reason: {body.reason}" if body.reason else "")
+        else:
+            title = "Account Reactivated"
+            msg = "Your account has been reactivated. You can now accept bookings again."
+        db.collection("notifications").document().set({
+            "user_id": uid,
+            "type": "account_suspended" if body.suspended else "account_reactivated",
+            "title": title,
+            "message": msg,
+            "reference_id": uid,
+            "created_at": now_iso,
+            "is_read": False,
+        })
+    except Exception:
+        pass
+
+    return {
+        "uid": uid,
+        "is_suspended": body.suspended,
+        "message": "Provider suspended." if body.suspended else "Provider reactivated.",
     }
