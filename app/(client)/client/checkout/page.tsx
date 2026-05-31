@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCart } from "@/config/context/CartContext";
 import { useLocation } from "@/config/context/LocationContext";
-import { bookingsAPI, addressesAPI, couponsAPI, paymentsAPI } from "@/lib/api";
+import { bookingsAPI, addressesAPI, couponsAPI, paymentsAPI, getPublicConfig } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -19,7 +19,7 @@ import { Suspense } from "react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const CONVENIENCE_FEE = 99;
+const DEFAULT_CONVENIENCE_FEE = 99;
 
 const TIME_SLOTS = [
   "08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM",
@@ -79,6 +79,19 @@ function CheckoutPage() {
   const [done, setDone] = useState(false);
   const [bookingRef, setBookingRef] = useState<string | null>(null);
 
+  // Convenience fee from platform config
+  const [convenienceFee, setConvenienceFee] = useState(DEFAULT_CONVENIENCE_FEE);
+  const [originalConvFee, setOriginalConvFee] = useState(DEFAULT_CONVENIENCE_FEE);
+
+  useEffect(() => {
+    getPublicConfig()
+      .then((res) => {
+        setConvenienceFee(res.data.convenience_fee);
+        setOriginalConvFee(res.data.original_convenience_fee);
+      })
+      .catch(() => { /* use default */ });
+  }, []);
+
   // Step 1 — slot
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
@@ -100,7 +113,7 @@ function CheckoutPage() {
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [couponMsg, setCouponMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const total = Math.max(0, subtotal - discount + CONVENIENCE_FEE);
+  const total = Math.max(0, subtotal - discount + convenienceFee);
 
   // Watch auth
   useEffect(() => {
@@ -586,7 +599,15 @@ function CheckoutPage() {
           </div>
         )}
         <div className="flex justify-between text-sm text-gray-600">
-          <span>Convenience Fee</span><span>₹{CONVENIENCE_FEE}</span>
+          <span>Convenience Fee</span>
+          {convenienceFee === 0 ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-400 line-through text-xs">₹{originalConvFee}</span>
+              <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 text-[10px] font-bold px-1.5 py-0.5 rounded-md">FREE</span>
+            </div>
+          ) : (
+            <span>₹{convenienceFee}</span>
+          )}
         </div>
         <div className="flex justify-between font-bold text-gray-900 pt-2 border-t border-gray-200">
           <span>Total</span><span>₹{total.toLocaleString("en-IN")}</span>

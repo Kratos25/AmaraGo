@@ -212,6 +212,16 @@ export interface DashboardStats {
   provider_fill_rate: number;
 }
 
+export interface PlatformConfig {
+  convenience_fee: number;
+  original_convenience_fee: number;
+  commission_rate_default: number;
+}
+
+/** Fetch convenience fee without auth (used on checkout page) */
+export const getPublicConfig = (): Promise<{ data: { convenience_fee: number; original_convenience_fee: number } }> =>
+  api.get('/admin/config/public');
+
 export interface BaseNotification {
   id: string;
   title: string;
@@ -528,6 +538,8 @@ export const adminAPI = {
   getClient: (uid: string) => api.get<UserProfile>(`/admin/clients/${uid}`),
   getClientBookings: (uid: string) => api.get<Booking[]>(`/admin/clients/${uid}/bookings`),
   getNotifications: () => api.get<Notification[]>('/admin/notifications'),
+  getConfig: () => api.get<PlatformConfig>('/admin/config'),
+  updateConfig: (data: Partial<PlatformConfig>) => api.put<PlatformConfig>('/admin/config', data),
 };
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────
