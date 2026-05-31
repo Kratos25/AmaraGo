@@ -39,6 +39,12 @@ export async function POST(req: NextRequest) {
       // Fallback — non-fatal; session still set
     }
 
+    // Admin email always wins regardless of what Firestore says
+    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    if (adminEmail && decoded.email === adminEmail) {
+      role = "admin";
+    }
+
     const cookieOpts = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
