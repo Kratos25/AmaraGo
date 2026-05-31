@@ -520,7 +520,7 @@ export default function AdminBookings() {
   const [assignModal, setAssignModal] = useState<Booking | null>(null);
 
   useEffect(() => {
-    bookingsAPI.list().then(({ data }) => setBookings(data.map(mapBooking))).catch(() => {});
+    bookingsAPI.list({ limit: 100 }).then(({ data }) => setBookings(data.items.map(mapBooking))).catch(() => {});
   }, []);
 
   // Counts

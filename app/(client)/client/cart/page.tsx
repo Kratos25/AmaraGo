@@ -144,8 +144,12 @@ export default function CartPage() {
       <div className="space-y-3 mb-6">
         {items.map((item) => (
           <div key={item.id} className="flex gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#fdf0f3] to-[#fff5f7] rounded-xl flex items-center justify-center flex-shrink-0">
-              <span className="text-2xl">{getServiceEmoji(item.name)}</span>
+            <div className="w-16 h-16 bg-gradient-to-br from-[#fdf0f3] to-[#fff5f7] rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+              {item.image_url ? (
+                <img src={item.image_url} alt={item.name} className="w-full h-full object-cover rounded-xl" />
+              ) : (
+                <span className="text-2xl" aria-hidden="true">{getServiceEmoji(item.name)}</span>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm truncate">{item.name}</p>
@@ -257,8 +261,12 @@ export default function CartPage() {
               .slice(0, 3)
               .map((svc) => (
                 <div key={svc.id} className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-gray-100">
-                  <div className="w-11 h-11 rounded-xl bg-[#fdf0f3] flex items-center justify-center text-lg flex-shrink-0">
-                    {getServiceEmoji(svc.name)}
+                  <div className="w-11 h-11 rounded-xl bg-[#fdf0f3] flex items-center justify-center text-lg flex-shrink-0 overflow-hidden">
+                    {svc.image_url ? (
+                      <img src={svc.image_url} alt={svc.name} className="w-full h-full object-cover rounded-xl" />
+                    ) : (
+                      <span aria-hidden="true">{getServiceEmoji(svc.name)}</span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">{svc.name}</p>

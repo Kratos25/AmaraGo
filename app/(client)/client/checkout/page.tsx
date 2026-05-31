@@ -10,7 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCart } from "@/config/context/CartContext";
-import { bookingsAPI, addressesAPI, couponsAPI } from "@/lib/api";
+import { useLocation } from "@/config/context/LocationContext";
+import { bookingsAPI, addressesAPI, couponsAPI, paymentsAPI } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -70,6 +71,7 @@ function CheckoutPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { items, subtotal, clearCart } = useCart();
+  const { lat, lng } = useLocation();
 
   const [user, setUser] = useState<User | null>(null);
   const [step, setStep] = useState(1);
@@ -103,6 +105,15 @@ function CheckoutPage() {
   // Watch auth
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => setUser(u));
+  }, []);
+
+  // Preload Razorpay checkout.js
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.body.appendChild(script);
+    return () => { document.body.removeChild(script); };
   }, []);
 
   // Load addresses
@@ -197,9 +208,50 @@ function CheckoutPage() {
         address_text: finalAddressText,
         payment_method: paymentMethod as any,
         coupon_code: appliedCoupon || undefined,
+        latitude: lat ?? undefined,
+        longitude: lng ?? undefined,
       });
 
       setBookingRef(data.booking_ref ?? null);
+
+      // HIGH-06: For online payments, open Razorpay checkout before confirming
+      if (paymentMethod !== "cash") {
+        await new Promise<void>((resolve, reject) => {
+          paymentsAPI.createOrder(data.id).then(({ data: order }) => {
+            const options = {
+              key: order.key_id,
+              amount: order.amount_paise,
+              currency: order.currency,
+              name: "AmaraGo",
+              description: `Booking ${data.booking_ref ?? data.id}`,
+              order_id: order.razorpay_order_id,
+              prefill: {
+                name: user?.displayName ?? "",
+                email: user?.email ?? "",
+              },
+              theme: { color: "#e5849c" },
+              handler: (paymentResponse: {
+                razorpay_payment_id: string;
+                razorpay_order_id: string;
+                razorpay_signature: string;
+              }) => {
+                paymentsAPI.verifyPayment({
+                  booking_id: data.id,
+                  razorpay_order_id: paymentResponse.razorpay_order_id,
+                  razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                  razorpay_signature: paymentResponse.razorpay_signature,
+                }).then(() => resolve()).catch(reject);
+              },
+              modal: {
+                ondismiss: () => reject(new Error("Payment cancelled. Booking is still held — try again.")),
+              },
+            };
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+          }).catch(reject);
+        });
+      }
+
       await clearCart();
       setDone(true);
     } catch (err: any) {
@@ -301,6 +353,8 @@ function CheckoutPage() {
               <button
                 key={slot}
                 onClick={() => setSelectedTime(slot)}
+                aria-label={`Select time slot ${slot}`}
+                aria-pressed={selectedTime === slot}
                 className={`py-2.5 rounded-xl text-xs font-semibold border transition-all ${
                   selectedTime === slot
                     ? "bg-[#e5849c] border-[#e5849c] text-white"

@@ -1,6 +1,11 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import { auth } from '@/lib/firebase';
 import { toast } from '@/hooks/use-toast';
+
+// Extend AxiosRequestConfig to track retry attempts
+interface RetryConfig extends AxiosRequestConfig {
+  _retry?: boolean;
+}
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000',
@@ -17,21 +22,42 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Global response error handler — shows readable toasts for auth/permission errors.
+// Global response error handler — auto-refresh token on 401, show toasts for others.
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config as RetryConfig;
     const status  = error?.response?.status;
     const detail  = error?.response?.data?.detail as string | undefined;
 
-    if (status === 401) {
+    // ── Auto-refresh Firebase token on first 401, then retry once ───────────
+    if (status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const user = auth.currentUser;
+        if (user) {
+          const freshToken = await user.getIdToken(/* forceRefresh */ true);
+          // Update the session cookie with the fresh token
+          await fetch('/api/auth/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: freshToken }),
+          });
+          originalRequest.headers = {
+            ...originalRequest.headers,
+            Authorization: `Bearer ${freshToken}`,
+          };
+          return api(originalRequest);
+        }
+      } catch {
+        // Refresh failed — fall through to show toast and reject
+      }
       toast({
         title: 'Session expired',
         description: 'Please log in again to continue.',
         variant: 'destructive',
       });
     } else if (status === 403) {
-      // Use the backend's detail message when available, otherwise a generic one.
       const message =
         detail && !detail.toLowerCase().includes('access denied')
           ? detail

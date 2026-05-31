@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React from 'react';
 import { User } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
 interface Props {
   currentUser: User | null;
@@ -11,15 +11,7 @@ interface Props {
 }
 
 export function OffersCarousel({ currentUser, onBookNow, onProfile }: Props) {
-  const [idx, setIdx] = useState(0);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
+  const router = useRouter();
 
   const cards = [
     {
@@ -52,43 +44,46 @@ export function OffersCarousel({ currentUser, onBookNow, onProfile }: Props) {
       imgSrc: '/assets/offers/offer-rewards.png',
       imgStyle: { bottom: '0px', right: '-1px' } as React.CSSProperties,
     },
+    {
+      gradient: 'from-[#0f4c35] to-[#1a7a52]',
+      tag: 'Join Us',
+      title: 'Become a\nService Provider',
+      sub: 'Set your own schedule. Earn on your terms.',
+      btnLabel: 'Apply Now →',
+      onClick: () => router.push('/client/profile'),
+      imgSrc: '',
+      imgStyle: { bottom: '8px', right: '16px' } as React.CSSProperties,
+      emoji: '💼',
+    },
   ];
 
-  const prev = () => setIdx((i) => (i === 0 ? cards.length - 1 : i - 1));
-  const next = () => setIdx((i) => (i === cards.length - 1 ? 0 : i + 1));
+  // Duplicate cards for seamless infinite loop
+  const loopCards = [...cards, ...cards];
 
   return (
-    <div className="relative">
-      {/* Arrow buttons — mobile only */}
-      {isMobile && (
-        <>
-          <button
-            onClick={prev}
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
-          >
-            <ChevronLeft size={16} className="text-gray-600" />
-          </button>
-          <button
-            onClick={next}
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-8 h-8 bg-white rounded-full shadow-md border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors"
-          >
-            <ChevronRight size={16} className="text-gray-600" />
-          </button>
-        </>
-      )}
+    <>
+      {/* Inject keyframe animation */}
+      <style>{`
+        @keyframes offers-scroll {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .offers-track {
+          animation: offers-scroll 16s linear infinite;
+        }
+        .offers-track:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
 
-      {/* Cards container */}
       <div className="overflow-hidden">
-        <div
-          className="flex transition-transform duration-300 ease-in-out gap-4"
-          style={isMobile ? { transform: `translateX(calc(-${idx * 100}% - ${idx * 18}px))` } : undefined}
-        >
-          {cards.map((card, i) => (
+        <div className="offers-track flex gap-4" style={{ width: 'max-content' }}>
+          {loopCards.map((card, i) => (
             <div
               key={i}
-              className={`flex-shrink-0 w-full md:w-[390px] rounded-[10px] bg-gradient-to-br ${card.gradient} relative overflow-hidden h-[183px]`}
+              className={`flex-shrink-0 w-[320px] md:w-[390px] rounded-[10px] bg-gradient-to-br ${card.gradient} relative overflow-hidden h-[183px]`}
             >
-              {/* Text content */}
+              {/* Text */}
               <div className="relative p-5 pt-4 z-10">
                 <span className="text-[10px] font-semibold uppercase tracking-widest bg-white/20 text-white px-2.5 py-1 rounded-full">
                   {card.tag}
@@ -105,33 +100,24 @@ export function OffersCarousel({ currentUser, onBookNow, onProfile }: Props) {
                 </button>
               </div>
 
-              {/* Card image — per-card positioning */}
+              {/* Illustration */}
               <div className="absolute pointer-events-none select-none" style={card.imgStyle}>
-                <img
-                  src={card.imgSrc}
-                  alt={card.tag}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
+                {card.imgSrc ? (
+                  <img
+                    src={card.imgSrc}
+                    alt={card.tag}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : (card as any).emoji ? (
+                  <span style={{ fontSize: '80px', lineHeight: 1, opacity: 0.3 }}>
+                    {(card as any).emoji}
+                  </span>
+                ) : null}
               </div>
             </div>
           ))}
         </div>
       </div>
-
-      {/* Dot indicators — mobile only */}
-      {isMobile && (
-        <div className="flex justify-center gap-1.5 mt-3">
-          {cards.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setIdx(i)}
-              className={`w-1.5 h-1.5 rounded-full transition-all ${
-                i === idx ? 'bg-[#E91E8C] w-4' : 'bg-gray-300'
-              }`}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    </>
   );
 }

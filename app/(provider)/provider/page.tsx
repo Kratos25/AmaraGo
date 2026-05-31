@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import {
   TrendingUp, Briefcase, Wallet, Award, ChevronRight,
   MapPin, Clock, Calendar, User, Star, CheckCircle2,
-  Timer, AlertCircle, IndianRupee, Percent,
+  Timer, AlertCircle, IndianRupee, Percent, Bell, Check, X,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/app/lib/utils';
 import ProviderLayout from './_components/ProviderLayout';
-import { providersAPI, type ProviderProfile, type Booking, type EarningsSummary } from '@/lib/api';
+import { providersAPI, bookingsAPI, type ProviderProfile, type Booking, type EarningsSummary } from '@/lib/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -169,18 +169,46 @@ function SkeletonRows({ n = 3, h = 'h-[60px]' }: { n?: number; h?: string }) {
 
 export default function SPDashboard() {
   const router = useRouter();
-  const [profile,  setProfile]  = useState<ProviderProfile | null>(null);
-  const [allJobs,  setAllJobs]  = useState<Booking[]>([]);
-  const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
-  const [loading,  setLoading]  = useState(true);
+  const [profile,    setProfile]    = useState<ProviderProfile | null>(null);
+  const [allJobs,    setAllJobs]    = useState<Booking[]>([]);
+  const [earnings,   setEarnings]   = useState<EarningsSummary | null>(null);
+  const [loading,    setLoading]    = useState(true);
+  const [jobOffers,  setJobOffers]  = useState<Booking[]>([]);
+  const [offerActing, setOfferActing] = useState<string | null>(null); // bookingId being acted on
 
   useEffect(() => {
     Promise.allSettled([
       providersAPI.getMyProfile().then(({ data }) => setProfile(data)),
       providersAPI.getMyJobs().then(({ data }) => setAllJobs(data)),
       providersAPI.getMyEarnings().then(({ data }) => setEarnings(data)),
+      providersAPI.getJobOffers().then(({ data }) => setJobOffers(data)),
     ]).finally(() => setLoading(false));
   }, []);
+
+  async function handleAcceptOffer(bookingId: string) {
+    setOfferActing(bookingId);
+    try {
+      const { data } = await bookingsAPI.acceptOffer(bookingId);
+      setJobOffers((prev) => prev.filter((b) => b.id !== bookingId));
+      setAllJobs((prev) => [...prev, data]);
+    } catch {
+      // silently ignore — provider may try again
+    } finally {
+      setOfferActing(null);
+    }
+  }
+
+  async function handleRejectOffer(bookingId: string) {
+    setOfferActing(bookingId);
+    try {
+      await bookingsAPI.rejectOffer(bookingId);
+      setJobOffers((prev) => prev.filter((b) => b.id !== bookingId));
+    } catch {
+      // silently ignore
+    } finally {
+      setOfferActing(null);
+    }
+  }
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const activeJobs = useMemo(
@@ -249,6 +277,71 @@ export default function SPDashboard() {
 
         {/* ── Full dashboard (approved only) ── */}
         {(loading || (profile && profile.is_approved)) && (<>
+
+        {/* ── Job Offers ── */}
+        {(loading || jobOffers.length > 0) && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-[15px] text-[#1A1A1A] tracking-tight">Job Offers</h2>
+                {!loading && jobOffers.length > 0 && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#C84B31] text-white text-[10px] font-bold animate-pulse">
+                    {jobOffers.length}
+                  </span>
+                )}
+              </div>
+              <Bell className="w-4 h-4 text-[#C84B31]" />
+            </div>
+            <div className="space-y-2">
+              {loading ? (
+                <SkeletonRows n={2} />
+              ) : (
+                jobOffers.map((offer) => (
+                  <div
+                    key={offer.id}
+                    className="flex items-center gap-3 px-4 py-3.5 bg-[#FFF8F6] border border-[#FDDDD5] rounded-xl"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-[#FFF0EC] border border-[#FDDDD5] flex items-center justify-center shrink-0">
+                      <Briefcase className="w-4 h-4 text-[#C84B31]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-[13px] text-[#1A1A1A] truncate">{offer.service_name ?? 'Service'}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="text-[11px] text-[#9CA3AF]">{offer.client_name ?? '—'}</span>
+                        <span className="text-[#D1D5DB]">·</span>
+                        <span className="text-[11px] text-[#9CA3AF]">{offer.date}</span>
+                        <span className="text-[#D1D5DB]">·</span>
+                        <span className="text-[11px] text-[#9CA3AF]">{offer.time}</span>
+                      </div>
+                    </div>
+                    <p className="font-bold text-[13px] text-[#1A1A1A] shrink-0 mr-2">₹{fmt(offer.total_price)}</p>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        disabled={offerActing === offer.id}
+                        onClick={() => handleAcceptOffer(offer.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-[12px] font-semibold rounded-lg transition-colors"
+                        aria-label="Accept job offer"
+                      >
+                        <Check className="w-3 h-3" />
+                        Accept
+                      </button>
+                      <button
+                        disabled={offerActing === offer.id}
+                        onClick={() => handleRejectOffer(offer.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 border border-[#EBEBEB] bg-white hover:bg-[#F5F4F2] disabled:opacity-50 text-[#6B7280] text-[12px] font-semibold rounded-lg transition-colors"
+                        aria-label="Reject job offer"
+                      >
+                        <X className="w-3 h-3" />
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {stats.map((s) => <StatCard key={s.label} {...s} />)}
         </div>

@@ -127,6 +127,11 @@ export interface Booking {
   provider_review?: ReviewDetail;
   booking_ref?: string;
   items?: BookingItem[];
+  offered_to?: string[];
+  rejected_by?: string[];
+  no_providers_in_area?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Certification {
@@ -165,6 +170,9 @@ export interface ProviderProfile {
   commission_rate: number;
   created_at?: string;
   documents?: ProviderDocuments;
+  latitude?: number;
+  longitude?: number;
+  service_radius_km?: number;
 }
 
 export interface EarningTransaction {
@@ -204,22 +212,20 @@ export interface DashboardStats {
   provider_fill_rate: number;
 }
 
-export interface Notification {
+export interface BaseNotification {
   id: string;
-  type: 'new_booking' | 'pending_approval';
   title: string;
   message: string;
   reference_id: string;
   created_at?: string;
 }
 
-export interface ProviderNotification {
-  id: string;
-  type: 'new_booking' | 'new_rating' | 'booking_cancelled';
-  title: string;
-  message: string;
-  reference_id: string;
-  created_at?: string;
+export interface Notification extends BaseNotification {
+  type: 'new_booking' | 'pending_approval' | 'booking_confirmed' | 'booking_cancelled' | 'booking_completed' | 'no_providers';
+}
+
+export interface ProviderNotification extends BaseNotification {
+  type: 'new_booking' | 'new_rating' | 'booking_cancelled' | 'job_offer';
 }
 
 export interface ValidateCouponResponse {
@@ -227,6 +233,18 @@ export interface ValidateCouponResponse {
   discount_amount: number;
   message: string;
   coupon?: Coupon;
+}
+
+export interface PaginatedBookings {
+  items: Booking[];
+  next_cursor: string | null;
+}
+
+export interface RazorpayOrder {
+  razorpay_order_id: string;
+  amount_paise: number;
+  currency: string;
+  key_id: string;
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -277,7 +295,7 @@ export const categoriesAPI = {
 // ─── Services ─────────────────────────────────────────────────────────────────
 
 export const servicesAPI = {
-  list: (params?: { category_id?: string; popular?: boolean; active?: boolean }) =>
+  list: (params?: { category_id?: string; popular?: boolean; active?: boolean; search?: string }) =>
     api.get<Service[]>('/services', { params }),
 
   listAll: () => api.get<Service[]>('/services', { params: { all: true } }),
@@ -351,7 +369,7 @@ export const couponsAPI = {
 export const addressesAPI = {
   list: () => api.get<Address[]>('/addresses'),
 
-  create: (data: { label: string; address: string; icon?: string; is_default?: boolean }) =>
+  create: (data: { label: string; address: string; icon?: string; is_default?: boolean; latitude?: number; longitude?: number }) =>
     api.post<Address>('/addresses', data),
 
   update: (id: string, data: Partial<{ label: string; address: string; icon: string; is_default: boolean }>) =>
@@ -363,8 +381,8 @@ export const addressesAPI = {
 // ─── Bookings ─────────────────────────────────────────────────────────────────
 
 export const bookingsAPI = {
-  list: (params?: { status?: string }) =>
-    api.get<Booking[]>('/bookings', { params }),
+  list: (params?: { status?: string; limit?: number; cursor?: string }) =>
+    api.get<PaginatedBookings>('/bookings', { params }),
 
   getById: (id: string) => api.get<Booking>(`/bookings/${id}`),
 
@@ -406,6 +424,8 @@ export const bookingsAPI = {
     payment_method: 'upi' | 'card' | 'wallet' | 'cash';
     coupon_code?: string;
     notes?: string;
+    latitude?: number;
+    longitude?: number;
   }) => api.post<Booking>('/bookings/multi', data),
 
   /** Edit a pending booking's date/time/address/notes. */
@@ -415,6 +435,14 @@ export const bookingsAPI = {
     address_text?: string;
     notes?: string;
   }) => api.put<Booking>(`/bookings/${bookingId}`, data),
+
+  /** Provider accepts a job offer — self-assigns and confirms the booking. */
+  acceptOffer: (bookingId: string) =>
+    api.post<Booking>(`/bookings/${bookingId}/accept`, {}),
+
+  /** Provider rejects a job offer — booking stays pending for others. */
+  rejectOffer: (bookingId: string) =>
+    api.post<Booking>(`/bookings/${bookingId}/reject`, {}),
 };
 
 // ─── Providers ────────────────────────────────────────────────────────────────
@@ -456,6 +484,9 @@ export const providersAPI = {
 
   getMyJobs: (params?: { status?: string }) =>
     api.get<Booking[]>('/providers/me/jobs', { params }),
+
+  /** Pending bookings in the provider's city that they haven't yet accepted/rejected. */
+  getJobOffers: () => api.get<Booking[]>('/providers/me/job-offers'),
 
   getMyEarnings: () => api.get<EarningsSummary>('/providers/me/earnings'),
 
@@ -545,4 +576,20 @@ export const wishlistAPI = {
   /** Merge locally-stored guest IDs into the server wishlist after login */
   sync: (serviceIds: string[]) =>
     api.post<{ wishlist: string[] }>('/wishlist/sync', { service_ids: serviceIds }),
+};
+
+// ─── Payments ─────────────────────────────────────────────────────────────────
+
+export const paymentsAPI = {
+  /** Create a Razorpay order for a pending booking. Amount is read server-side. */
+  createOrder: (bookingId: string) =>
+    api.post<RazorpayOrder>('/payments/create-order', { booking_id: bookingId }),
+
+  /** Verify Razorpay payment signature after checkout completes. */
+  verifyPayment: (data: {
+    booking_id: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) => api.post('/payments/verify', data),
 };

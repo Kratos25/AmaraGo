@@ -115,7 +115,6 @@ export default function ServicesClient() {
       )}
       <CategoriesSection categories={categoryList} />
       <MidBannerSection />
-      <SiteFooter />
     </div>
   );
 }

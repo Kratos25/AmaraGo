@@ -16,12 +16,14 @@ export function StarPicker({ value, onChange }: StarPickerProps) {
         <button
           key={n}
           type="button"
+          aria-label={`Rate ${n} star${n !== 1 ? 's' : ''}`}
+          aria-pressed={n === value}
           onMouseEnter={() => setHovered(n)}
           onMouseLeave={() => setHovered(0)}
           onClick={() => onChange(n)}
-          className="text-4xl transition-all hover:scale-125 focus:outline-none leading-none"
+          className="text-4xl transition-all hover:scale-125 focus:outline-none focus:ring-2 focus:ring-amber-400/60 rounded leading-none"
         >
-          <span className={n <= (hovered || value) ? 'text-amber-400' : 'text-gray-200'}>★</span>
+          <span aria-hidden="true" className={n <= (hovered || value) ? 'text-amber-400' : 'text-gray-200'}>★</span>
         </button>
       ))}
     </div>

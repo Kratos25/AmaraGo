@@ -18,4 +18,6 @@ export interface Booking {
   status: BookingStatus;
   hasClientReview: boolean;
   clientReviewRating?: number;
+  no_providers_in_area?: boolean;
+  offered_to_count?: number;
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { SiteFooter } from '@/app/(client)/client/home/_sections/SiteFooter';
 import { Home, Scissors, Calendar, User, ShoppingCart, ChevronDown, LogIn, LogOut, Search } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
@@ -320,7 +321,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ── Page content ────────────────────────────────────────── */}
-      <main className="pb-20 md:pb-0">{children}</main>
+      <main className="pb-20 md:pb-0">
+        {children}
+        <SiteFooter />
+      </main>
 
       {/* ── Mobile bottom tab bar ───────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-[#111827]">

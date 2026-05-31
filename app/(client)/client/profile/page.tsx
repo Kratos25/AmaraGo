@@ -13,6 +13,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { usersAPI, loyaltyAPI } from '@/lib/api';
 import { addressesAPI } from '@/lib/api';
+import { ProviderRegistrationModal } from '@/app/(client)/client/_components/ProviderRegistrationModal';
 
 type MenuItemType = {
   icon: React.ReactNode;
@@ -25,13 +26,13 @@ type MenuItemType = {
   action?: () => void;
 };
 
-const achievements = [
-  { icon: '💅', label: 'First Booking',   unlocked: true  },
-  { icon: '⭐', label: 'Star Reviewer',   unlocked: true  },
-  { icon: '🔥', label: '5 Bookings',      unlocked: true  },
-  { icon: '💎', label: 'VIP Member',      unlocked: false },
-  { icon: '🎂', label: 'Birthday Beauty', unlocked: false },
-  { icon: '👑', label: 'Loyalty Queen',   unlocked: false },
+const BASE_ACHIEVEMENTS = [
+  { icon: '💅', label: 'First Booking',   requiredBookings: 1,  requiredPoints: 0   },
+  { icon: '⭐', label: 'Star Reviewer',   requiredBookings: 1,  requiredPoints: 0,  requiresReview: true },
+  { icon: '🔥', label: '5 Bookings',      requiredBookings: 5,  requiredPoints: 0   },
+  { icon: '💎', label: 'VIP Member',      requiredBookings: 0,  requiredPoints: 500 },
+  { icon: '🎂', label: 'Birthday Beauty', requiredBookings: 10, requiredPoints: 0   },
+  { icon: '👑', label: 'Loyalty Queen',   requiredBookings: 0,  requiredPoints: 1000},
 ];
 
 export default function Profile() {
@@ -47,6 +48,8 @@ export default function Profile() {
   const [notifications, setNotifs]  = useState(true);
   const [saving, setSaving]         = useState(false);
   const [showAddresses, setShowAddresses] = useState(false);
+  const [showProviderModal, setShowProviderModal] = useState(false);
+  const [isProvider, setIsProvider] = useState(false);
   const [addresses, setAddresses]   = useState<any[]>([]);
   const [addrsLoading, setAddrsLoading] = useState(false);
   const [addingAddr, setAddingAddr] = useState(false);
@@ -105,6 +108,7 @@ export default function Profile() {
       .then(({ data }) => {
         if (data.phone) { setPhone(data.phone); setEditPhone(data.phone); }
         if (data.name)  { setName(data.name);   setEditName(data.name);   }
+        if ((data as any).role === 'provider') setIsProvider(true);
       })
       .catch(() => {});
   }, []);
@@ -113,6 +117,14 @@ export default function Profile() {
   const [bookingsCount, setBookingsCount] = useState(0);
   const [loyaltyTier, setLoyaltyTier]     = useState('Silver');
   const [tierProgress, setTierProgress]   = useState(0);
+
+  // Compute achievement unlock state from real data
+  const achievements = BASE_ACHIEVEMENTS.map((a) => ({
+    ...a,
+    unlocked:
+      (a.requiredBookings === 0 || bookingsCount >= a.requiredBookings) &&
+      (a.requiredPoints  === 0 || loyaltyPoints  >= a.requiredPoints),
+  }));
   const [nextTier, setNextTier]           = useState<string | null>('Gold');
   const [pointsNeeded, setPointsNeeded]   = useState(2000);
 
@@ -417,8 +429,49 @@ export default function Profile() {
           </div>
         ))}
 
+        {/* ── Become a Provider banner ─────────────────────────────── */}
+        {!isProvider && (
+          <button
+            onClick={() => setShowProviderModal(true)}
+            className="w-full flex items-center gap-4 bg-gradient-to-r from-[#111827] to-[#1f2937] rounded-2xl px-5 py-4 text-left hover:brightness-110 transition-all"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-[#e5849c]/20 flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">💼</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-white font-bold text-sm">Become a Service Provider</p>
+              <p className="text-white/50 text-xs mt-0.5">Earn money offering your skills on AmaraGo</p>
+            </div>
+            <ChevronRight size={18} className="text-[#e5849c] flex-shrink-0" />
+          </button>
+        )}
+        {isProvider && (
+          <button
+            onClick={() => router.push('/provider')}
+            className="w-full flex items-center gap-4 bg-gradient-to-r from-[#111827] to-[#1f2937] rounded-2xl px-5 py-4 text-left hover:brightness-110 transition-all"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-[#e5849c]/20 flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">💼</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-white font-bold text-sm">Provider Dashboard</p>
+              <p className="text-white/50 text-xs mt-0.5">Manage your bookings and earnings</p>
+            </div>
+            <ChevronRight size={18} className="text-[#e5849c] flex-shrink-0" />
+          </button>
+        )}
+
         <p className="text-center text-[10px] text-gray-300 pt-2">AmaraGo v1.0.0 · Made with 💗 in Mumbai</p>
       </div>
+
+      {/* Provider Registration Modal */}
+      {showProviderModal && user && (
+        <ProviderRegistrationModal
+          user={user}
+          onClose={() => setShowProviderModal(false)}
+          onSuccess={() => { setIsProvider(true); setShowProviderModal(false); }}
+        />
+      )}
 
       {/* Edit Profile bottom sheet */}
       {isEditing && (

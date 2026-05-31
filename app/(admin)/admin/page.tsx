@@ -110,7 +110,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     adminAPI.getDashboard().then(({ data }) => setStats(data)).catch(() => {});
-    bookingsAPI.list({ status: undefined }).then(({ data }) => setRecentBookings(data.slice(0, 5))).catch(() => {});
+    bookingsAPI.list({ limit: 5 }).then(({ data }) => setRecentBookings(data.items)).catch(() => {});
     providersAPI.list({ approved: false }).then(({ data }) => setPendingProviders(data)).catch(() => {});
   }, []);
 

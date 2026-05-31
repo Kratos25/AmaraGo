@@ -23,7 +23,6 @@ import { TrendingSection }        from './_sections/TrendingSection';
 import { MidBannerSection }       from './_sections/MidBannerSection';
 import { PopularServicesSection } from './_sections/PopularServicesSection';
 import { CouponsSection }         from './_sections/CouponsSection';
-import { SiteFooter }             from './_sections/SiteFooter';
 
 // Types
 import { Service } from './_types';
@@ -206,8 +205,25 @@ export default function Home() {
   }, [navigateToService, setNavigateToService]);
 
   // ─────────────────────────────────────────────────────────────────────────
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "AmaraGo",
+    "description": "Premium beauty and wellness services at your doorstep — hair, skincare, nail art, massage and more.",
+    "url": "https://amarago.in",
+    "image": "https://amarago.in/assets/og-image.png",
+    "priceRange": "₹₹",
+    "areaServed": { "@type": "Country", "name": "India" },
+    "serviceType": ["Beauty", "Wellness", "Salon at Home"],
+    "sameAs": [],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* ── Modals ────────────────────────────────────────────────── */}
       {showProviderModal && currentUser && (
         <ProviderRegistrationModal
@@ -219,7 +235,7 @@ export default function Home() {
       {showLocationPicker && (
         <LocationPickerModal
           current={userLocation}
-          onSelect={(loc) => { setLocation(loc, { confirmed: true }); setShowLocationPicker(false); }}
+          onSelect={(result) => { setLocation(result.address, { confirmed: true, lat: result.lat, lng: result.lng }); setShowLocationPicker(false); }}
           onClose={() => setShowLocationPicker(false)}
         />
       )}
@@ -254,8 +270,6 @@ export default function Home() {
         loading={couponsLoading}
         currentUser={currentUser}
       />
-
-      <SiteFooter />
 
       <div className="h-20 md:hidden" />
     </>

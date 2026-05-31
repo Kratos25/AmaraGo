@@ -16,11 +16,17 @@ interface StoredLocation {
   location: string;
   confirmed: boolean;
   isGift: boolean;
+  lat: number | null;
+  lng: number | null;
 }
 
 interface LocationContextValue {
   /** Full location string e.g. "Bandra, Mumbai" */
   location: string;
+  /** Latitude from Google Places (null if not set) */
+  lat: number | null;
+  /** Longitude from Google Places (null if not set) */
+  lng: number | null;
   /** Has the user explicitly confirmed their city? */
   locationConfirmed: boolean;
   /** Is the current location within a serviceable city? */
@@ -28,7 +34,7 @@ interface LocationContextValue {
   /** Is this a gift booking (user's own city differs from service city)? */
   isGift: boolean;
   /** Set location; confirmed=true persists it and hides the gate */
-  setLocation: (loc: string, opts?: { confirmed?: boolean; isGift?: boolean }) => void;
+  setLocation: (loc: string, opts?: { confirmed?: boolean; isGift?: boolean; lat?: number | null; lng?: number | null }) => void;
   /** Force the gate modal to reappear (e.g. "change city") */
   resetLocation: () => void;
   /** Whether the initial localStorage read is done */
@@ -37,6 +43,8 @@ interface LocationContextValue {
 
 const LocationContext = createContext<LocationContextValue>({
   location: '',
+  lat: null,
+  lng: null,
   locationConfirmed: false,
   isServiceable: false,
   isGift: false,
@@ -47,6 +55,8 @@ const LocationContext = createContext<LocationContextValue>({
 
 export function LocationProvider({ children }: { children: ReactNode }) {
   const [location, setLocationState] = useState('');
+  const [lat, setLat]               = useState<number | null>(null);
+  const [lng, setLng]               = useState<number | null>(null);
   const [locationConfirmed, setConfirmed] = useState(false);
   const [isGift, setIsGift] = useState(false);
   const [ready, setReady] = useState(false);
@@ -58,6 +68,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       if (raw) {
         const parsed: StoredLocation = JSON.parse(raw);
         setLocationState(parsed.location ?? '');
+        setLat(parsed.lat ?? null);
+        setLng(parsed.lng ?? null);
         setConfirmed(parsed.confirmed ?? false);
         setIsGift(parsed.isGift ?? false);
       }
@@ -70,15 +82,19 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const setLocation = useCallback(
     (
       loc: string,
-      opts: { confirmed?: boolean; isGift?: boolean } = {}
+      opts: { confirmed?: boolean; isGift?: boolean; lat?: number | null; lng?: number | null } = {}
     ) => {
       const confirmed = opts.confirmed ?? true;
       const gift = opts.isGift ?? false;
+      const newLat = opts.lat ?? null;
+      const newLng = opts.lng ?? null;
       setLocationState(loc);
+      setLat(newLat);
+      setLng(newLng);
       setConfirmed(confirmed);
       setIsGift(gift);
       try {
-        const data: StoredLocation = { location: loc, confirmed, isGift: gift };
+        const data: StoredLocation = { location: loc, confirmed, isGift: gift, lat: newLat, lng: newLng };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       } catch {
         // ignore storage errors
@@ -100,6 +116,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     <LocationContext.Provider
       value={{
         location,
+        lat,
+        lng,
         locationConfirmed,
         isServiceable,
         isGift,

@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, MapPin, ChevronDown, Loader2 } from 'lucide-react';
+import { Calendar, Clock, MapPin, ChevronDown, Loader2, AlertTriangle, Search } from 'lucide-react';
 import { ProviderDetailsPanel } from './ProviderDetailsPanel';
 import type { Booking } from './types';
 
@@ -71,10 +72,23 @@ interface BookingCardProps {
   onToggle: () => void;
   onEdit: (booking: Booking) => void;
   onRate: (booking: { id: string; service: string; expert: string }) => void;
+  onCancel: (bookingId: string) => void;
 }
 
-export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate }: BookingCardProps) {
+export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate, onCancel }: BookingCardProps) {
   const router = useRouter();
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancelConfirmed = async () => {
+    setCancelling(true);
+    try {
+      await onCancel(booking.id);
+    } finally {
+      setCancelling(false);
+      setConfirmCancel(false);
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-sm transition-shadow">
@@ -146,6 +160,12 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate }: Booki
                   >
                     View Details
                   </button>
+                  <button
+                    onClick={() => setConfirmCancel(true)}
+                    className="w-full py-2 rounded-md border border-red-200 text-[13px] font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
                 </>
               )}
 
@@ -163,6 +183,12 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate }: Booki
                     className="w-full py-2 rounded-xl border border-gray-200 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     View Details
+                  </button>
+                  <button
+                    onClick={() => setConfirmCancel(true)}
+                    className="w-full py-2 rounded-xl border border-red-200 text-[13px] font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    Cancel
                   </button>
                 </>
               )}
@@ -241,12 +267,31 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate }: Booki
               <ProviderDetailsPanel providerId={booking.provider_id} />
             </>
           ) : booking.api_status === 'pending' ? (
-            <div className="flex items-center gap-2 py-2 px-3 bg-amber-50 border border-amber-100 rounded-xl">
-              <Loader2 size={12} className="text-amber-500 animate-spin shrink-0" />
-              <p className="text-xs text-amber-600">
-                We're matching you with a provider — check back soon.
-              </p>
-            </div>
+            booking.no_providers_in_area ? (
+              <div className="flex items-start gap-3 py-3 px-4 bg-orange-50 border border-orange-100 rounded-xl">
+                <Search size={14} className="text-orange-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-semibold text-orange-700">Expanding to your area soon!</p>
+                  <p className="text-xs text-orange-600 mt-0.5">
+                    No provider is available in your area just yet. Our team is on it and will ensure your booking is fulfilled. You'll be notified as soon as a provider is assigned.
+                  </p>
+                </div>
+              </div>
+            ) : booking.offered_to_count && booking.offered_to_count > 0 ? (
+              <div className="flex items-center gap-2 py-2 px-3 bg-blue-50 border border-blue-100 rounded-xl">
+                <Loader2 size={12} className="text-blue-500 animate-spin shrink-0" />
+                <p className="text-xs text-blue-600">
+                  Waiting for a provider to accept — {booking.offered_to_count} notified.
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 py-2 px-3 bg-amber-50 border border-amber-100 rounded-xl">
+                <Loader2 size={12} className="text-amber-500 animate-spin shrink-0" />
+                <p className="text-xs text-amber-600">
+                  We're matching you with a provider — check back soon.
+                </p>
+              </div>
+            )
           ) : null}
 
           <button
@@ -255,6 +300,40 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate }: Booki
           >
             <ChevronDown size={12} className="rotate-180" /> Hide details
           </button>
+        </div>
+      )}
+
+      {/* ── Cancel confirmation dialog ── */}
+      {confirmCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={18} className="text-red-500" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Cancel Booking?</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+              Are you sure you want to cancel <span className="font-semibold text-gray-700">{booking.service}</span> on {booking.date}? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmCancel(false)}
+                disabled={cancelling}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Keep Booking
+              </button>
+              <button
+                onClick={handleCancelConfirmed}
+                disabled={cancelling}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {cancelling && <Loader2 size={14} className="animate-spin" />}
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

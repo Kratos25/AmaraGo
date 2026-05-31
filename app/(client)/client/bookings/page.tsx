@@ -34,7 +34,7 @@ export default function BookingsPage() {
   useEffect(() => {
     bookingsAPI
       .list()
-      .then(({ data }) => setApiBookings(data))
+      .then(({ data }) => setApiBookings(data.items))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -61,6 +61,8 @@ export default function BookingsPage() {
     ) as BookingStatus,
     hasClientReview:    !!b.client_review,
     clientReviewRating: b.client_review?.rating,
+    no_providers_in_area: b.no_providers_in_area ?? false,
+    offered_to_count:   b.offered_to?.length ?? 0,
   }));
 
   const totalCount     = allBookings.length;
@@ -92,6 +94,16 @@ export default function BookingsPage() {
     setApiBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, date, time } : b)),
     );
+  };
+
+  const handleCancel = async (bookingId: string) => {
+    await bookingsAPI.cancel(bookingId);
+    setApiBookings((prev) =>
+      prev.map((b) =>
+        b.id === bookingId ? { ...b, status: 'cancelled' as const } : b,
+      ),
+    );
+    toast({ title: 'Booking cancelled', description: 'Your booking has been cancelled.' });
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -193,6 +205,7 @@ export default function BookingsPage() {
                   onToggle={() => setExpandedId(expandedId === booking.id ? null : booking.id)}
                   onEdit={setEditModal}
                   onRate={setRatingModal}
+                  onCancel={handleCancel}
                 />
               ))}
 

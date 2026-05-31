@@ -108,6 +108,7 @@ with open('$ENV_VARS_FILE', 'w') as f:
     f.write(f'FIREBASE_PROJECT_ID: {yq("${FIREBASE_PROJECT_ID}")}\n')
     f.write(f'FIREBASE_CLIENT_EMAIL: {yq("${FIREBASE_CLIENT_EMAIL}")}\n')
     f.write(f'FIREBASE_PRIVATE_KEY: {yq(private_key)}\n')
+    f.write(f'NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: {yq("${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}")}\n')
 PYEOF
 
 # ── Deploy to Cloud Run ───────────────────────────────────────────────────────

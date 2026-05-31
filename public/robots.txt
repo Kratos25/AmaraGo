@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /provider/
+Disallow: /api/
+Disallow: /client/bookings/
+Disallow: /client/checkout/
+Disallow: /client/profile/
+
+Sitemap: https://amarago.in/sitemap.xml

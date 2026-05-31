@@ -89,6 +89,7 @@ function ProviderNotifPanel({
     new_booking:        { emoji: '📋', bg: 'bg-[#FFF0EC]', border: 'border-[#FDDDD5]' },
     new_rating:         { emoji: '⭐', bg: 'bg-amber-50',   border: 'border-amber-100' },
     booking_cancelled:  { emoji: '❌', bg: 'bg-red-50',     border: 'border-red-100'   },
+    job_offer:          { emoji: '🛎️', bg: 'bg-orange-50',  border: 'border-orange-100' },
   };
 
   return (
