@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { SiteFooter } from '@/app/(client)/client/home/_sections/SiteFooter';
-import { Home, Scissors, Calendar, User, ShoppingCart, ChevronDown, LogIn, LogOut, Search } from "lucide-react";
+import { Home, Scissors, Calendar, User, ShoppingCart, ChevronDown, ChevronRight, LogIn, LogOut, Search } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -227,9 +227,60 @@ function NavbarSearch({
   );
 }
 
+// ── Floating cart bar ───────────────────────────────────────
+function FloatingCartBar() {
+  const { itemCount, subtotal } = useCart();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  if (itemCount === 0 || pathname === '/client/checkout' || pathname === '/client/cart') return null;
+
+  return (
+    <>
+      {/* Mobile: sticky bar above bottom tab nav */}
+      <div className="md:hidden fixed bottom-16 inset-x-0 z-40 px-3 pb-2">
+        <button
+          onClick={() => router.push('/client/checkout')}
+          className="w-full flex items-center justify-between bg-[#111827] text-white rounded-2xl px-4 py-3.5 shadow-2xl active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-3">
+            <span className="bg-[#E8708E] text-white text-xs font-bold min-w-[22px] h-[22px] rounded-full flex items-center justify-center px-1">
+              {itemCount}
+            </span>
+            <span className="text-sm font-semibold">View Cart</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold">₹{subtotal.toLocaleString('en-IN')}</span>
+            <ChevronRight size={16} className="text-[#E8708E]" />
+          </div>
+        </button>
+      </div>
+
+      {/* Desktop: floating pill bottom-right */}
+      <div className="hidden md:block fixed bottom-8 right-8 z-40">
+        <button
+          onClick={() => router.push('/client/checkout')}
+          className="flex items-center gap-3 bg-[#111827] text-white rounded-full pl-4 pr-5 py-3 shadow-2xl hover:bg-[#1f2937] transition-all hover:scale-105 active:scale-100"
+        >
+          <ShoppingCart size={17} className="text-[#E8708E]" />
+          <span className="text-sm font-semibold">{itemCount} item{itemCount > 1 ? 's' : ''}</span>
+          <span className="w-px h-4 bg-white/20" />
+          <span className="text-sm font-bold">₹{subtotal.toLocaleString('en-IN')}</span>
+          <span className="text-xs font-bold text-[#E8708E] uppercase tracking-wide">Checkout →</span>
+        </button>
+      </div>
+    </>
+  );
+}
+
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { heroSearchVisible, navServices, navigateToService } = useSearchVisibility();
+  const { itemCount } = useCart();
+
+  const isCheckout = pathname === '/client/checkout';
+  const isCart = pathname === '/client/cart';
+  const showCartBar = itemCount > 0 && !isCheckout && !isCart;
 
   const isHomePage = pathname === '/client/home';
   // On home: show when hero search scrolls out of view. On all other pages: always show.
@@ -321,10 +372,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ── Page content ────────────────────────────────────────── */}
-      <main className="pb-20 md:pb-0">
+      <main className={`${showCartBar ? 'pb-36' : 'pb-20'} md:pb-0`}>
         {children}
-        <SiteFooter />
+        {!isCheckout && <SiteFooter />}
       </main>
+
+      {/* ── Floating cart bar ───────────────────────────────────── */}
+      <FloatingCartBar />
 
       {/* ── Mobile bottom tab bar ───────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-[#111827]">

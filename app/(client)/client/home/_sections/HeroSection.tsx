@@ -38,9 +38,9 @@ export function HeroSection({
 
   return (
     <section className="bg-[#FFEAEF]">
-      <div className="w-full mx-auto px-4 md:pl-28 md:pr-0 py-8 md:py-0 flex flex-col md:flex-row items-center gap-6 md:gap-16">
+      <div className="w-full mx-auto px-4 md:pl-28 md:pr-0 pt-8 pb-0 md:py-0 flex flex-col md:flex-row items-center gap-6 md:gap-16">
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold text-[#111827] leading-tight mb-3">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-[#111827] leading-tight mb-3">
             Self-care starts at your{' '}
             <span className="text-[#E8708E]">doorstep<span className="text-black">.</span></span>
           </h1>
@@ -83,12 +83,12 @@ export function HeroSection({
             <span className="text-xs text-[#7F5660] font-medium">10,000+ bookings in Mumbai</span>
           </div>
         </div>
-
-        <div className="relative flex-shrink-0 w-full md:w-auto max-h-52 sm:max-h-72 md:max-h-none overflow-hidden md:overflow-visible">
+        
+        <div className="relative flex-shrink-0 w-full md:w-auto flex justify-center md:block">
           {/* pink radial gradient blob behind the image */}
           <div className="absolute inset-0 -z-10 rounded-full bg-gradient-radial from-[#F9A8C9]/60 via-[#FFDCE9]/30 to-transparent blur-2xl scale-110" />
           <img src="/assets/hero/hero-professional.png" alt="AmaraGo beauty professional"
-            className="relative w-full h-full object-cover"
+            className="relative w-2/3 sm:w-1/2 md:w-full h-auto md:h-full object-contain md:object-cover"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </div>
       </div>

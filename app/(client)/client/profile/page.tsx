@@ -13,6 +13,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { usersAPI, loyaltyAPI } from '@/lib/api';
 import { addressesAPI } from '@/lib/api';
+import { useWishlist } from '@/config/context/WishlistContext';
 import { ProviderRegistrationModal } from '@/app/(client)/client/_components/ProviderRegistrationModal';
 
 type MenuItemType = {
@@ -38,6 +39,7 @@ const BASE_ACHIEVEMENTS = [
 export default function Profile() {
   const router           = useRouter();
   const { user }         = useAuth();
+  const { wishlist }     = useWishlist();
   const [isEditing, setIsEditing]   = useState(false);
   const [name, setName]             = useState(user?.displayName ?? 'User');
   const [phone, setPhone]           = useState('');
@@ -162,7 +164,7 @@ export default function Profile() {
       items: [
         { icon: <MapPin size={17} />, label: 'Saved Addresses', sub: `${addresses.length} address${addresses.length !== 1 ? 'es' : ''} saved`, action: () => setShowAddresses(true) },
         { icon: <Gift size={17} />,   label: 'Refer & Earn',    sub: 'Get ₹200 per referral', badge: 'NEW' },
-        { icon: <Heart size={17} />,  label: 'Wishlist',        sub: '3 saved services', href: '/client/wishlist' },
+        { icon: <Heart size={17} />,  label: 'Wishlist',        sub: `${wishlist?.length ?? 0} saved service${wishlist?.length !== 1 ? 's' : ''}`, href: '/client/wishlist' },
       ],
     },
     {
