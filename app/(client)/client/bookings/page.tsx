@@ -111,10 +111,10 @@ export default function BookingsPage() {
   return (
     <>
       <div className="min-h-screen bg-[#fdf6f8]">
-        <div className="max-full mx-auto px-24 pt-8 pb-28 md:pb-12">
+        <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 md:pt-8 pb-28 md:pb-12">
 
           {/* ── Stat cards ── */}
-          <div className="w-[50%] grid grid-cols-3 gap-3 mb-8">
+          <div className="grid grid-cols-3 gap-3 mb-6 md:mb-8">
             {[
               { val: String(totalCount).padStart(2, '0'),                          label: 'Total Bookings'     },
               { val: String(upcomingCount).padStart(2, '0'),                       label: 'Upcoming Bookings'  },

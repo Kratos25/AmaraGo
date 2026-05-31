@@ -45,9 +45,9 @@ export function CombinedSearchBar({ services, onNavigate, userLocation, onLocati
     <div ref={ref} className="relative">
       <form
         onSubmit={handleSubmit}
-        className="p-6 bg-white/50 backdrop-blur-xl rounded-[10px] border border-[#E8708E]/50"
+        className="p-3 md:p-6 bg-white/50 backdrop-blur-xl rounded-[10px] border border-[#E8708E]/50"
       >
-      <div className="flex items-stretch bg-white rounded-md drop-shadow-xl border border-[#E8708E]/30 overflow-hidden h-16 p-2.5">
+      <div className="flex items-stretch bg-white rounded-md drop-shadow-xl border border-[#E8708E]/30 overflow-hidden h-14 md:h-16 p-2">
           <div className="flex items-center gap-1 pl-2">
             <MapPin size={20} className="text-[#E8708E]" />
           </div>
@@ -80,9 +80,9 @@ export function CombinedSearchBar({ services, onNavigate, userLocation, onLocati
           {/* Search button */}
           <button
             type="submit"
-            className="bg-[#E8708E] hover:bg-[#c7166f] text-white text-sm font-semibold px-8 rounded-md flex items-center gap-1.5 transition-colors flex-shrink-0"
+            className="bg-[#E8708E] hover:bg-[#c7166f] text-white text-sm font-semibold px-4 md:px-8 rounded-md flex items-center gap-1.5 transition-colors flex-shrink-0"
           >
-            Search <ArrowRight size={15} />
+            <span className="hidden md:inline">Search</span> <ArrowRight size={15} />
           </button>
         </div>
       </form>

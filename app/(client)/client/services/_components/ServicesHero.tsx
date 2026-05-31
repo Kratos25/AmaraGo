@@ -23,14 +23,14 @@ export function ServicesHero({ loading, categoryList, activeCategory, onSelectCa
       <div className="max-w-5xl mx-auto px-4 md:px-8 flex flex-col md:flex-row gap-6 items-stretch">
 
         {/* Left: heading + category tiles */}
-        <div className="flex-1 min-w-0 border-2 border-[#FFEAEF] bg-[#FFF8FA] rounded-3xl py-6 px-6 md:px-12">
+        <div className="flex-1 min-w-0 border-2 border-[#FFEAEF] bg-[#FFF8FA] rounded-3xl py-5 px-4 sm:py-6 sm:px-6 md:px-12">
           <h1 className="text-3xl md:text-4xl font-medium text-[#111827] mb-[-10px]">Explore</h1>
           <div className="flex items-center gap-2 mt-3 mb-4">
             <span className="text-lg md:text-[22px] font-normal text-[#000000]">Our wide range of Services</span>
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-3">
               {[1,2,3,4,5,6,7,8].map((i) => (
                 <div key={i} className="animate-pulse">
                   <div className="aspect-square rounded-2xl bg-gray-100" />
@@ -39,7 +39,7 @@ export function ServicesHero({ loading, categoryList, activeCategory, onSelectCa
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-3">
               {categoryList.map((cat) => {
                 const active = activeCategory === cat.name;
                 const CatIcon = getCategoryIcon(cat.icon, cat.name);

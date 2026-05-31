@@ -94,16 +94,16 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate, onCance
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-sm transition-shadow">
 
       {/* ── Main row ── */}
-      <div className="flex items-stretch gap-0 p-4">
+      <div className="flex items-stretch gap-0 p-3 sm:p-4">
 
         {/* Thumbnail — fixed width, full card height */}
-        <div className="w-[15%] shrink-0 overflow-hidden-l-2xl p-2">
+        <div className="w-12 sm:w-[15%] shrink-0 overflow-hidden rounded-xl sm:rounded-l-2xl p-1 sm:p-2">
           <ServiceThumb service={booking.service} image={booking.serviceImage} />
         </div>
 
         {/* Middle — service info */}
-        <div className="flex-1 min-w-0 px-5 py-4 flex flex-col justify-center gap-2">
-          <p className="font-semibold text-[#111827] text-[15px] leading-snug">
+        <div className="flex-1 min-w-0 px-2 sm:px-5 py-1 sm:py-4 flex flex-col justify-center gap-1.5 sm:gap-2">
+          <p className="font-semibold text-[#111827] text-[14px] sm:text-[15px] leading-snug line-clamp-2">
             {booking.service}
           </p>
 
@@ -131,38 +131,38 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate, onCance
         </div>
 
         {/* Right — status, price, actions */}
-        <div className="shrink-0 flex flex-col-2 items-end justify-between px-5 py-4 border-l border-gray-50 gap-4">
+        <div className="shrink-0 flex flex-col items-end justify-between px-2 sm:px-5 py-2 sm:py-4 border-l border-gray-50 gap-2 sm:gap-4">
 
           {/* Top: status badge */}
-          <div className="flex flex-col items-center gap-6">
+          <div className="flex flex-col items-end gap-1 sm:gap-6">
             <StatusBadge status={booking.status} apiStatus={booking.api_status} />
-            <p className="text-[17px] font-bold text-[#111827]">
+            <p className="text-[13px] sm:text-[17px] font-bold text-[#111827]">
               ₹{booking.price.toLocaleString('en-IN')}
             </p>
           </div>
 
           {/* Bottom: price + buttons */}
           <div className="flex flex-col items-end gap-2">
-            <div className="flex flex-col items-stretch gap-2 w-[130px]">
+            <div className="flex flex-col items-stretch gap-1 sm:gap-2 w-[80px] sm:w-[130px]">
 
               {/* Pending */}
               {booking.api_status === 'pending' && (
                 <>
                   <button
                     onClick={() => onEdit(booking)}
-                    className="w-full py-2 rounded-md bg-[#e0608a] hover:bg-[#cc5279] text-white text-[13px] font-semibold transition-colors"
+                    className="w-full py-1.5 sm:py-2 rounded-md bg-[#e0608a] hover:bg-[#cc5279] text-white text-[11px] sm:text-[13px] font-semibold transition-colors"
                   >
                     Reschedule
                   </button>
                   <button
                     onClick={onToggle}
-                    className="w-full py-2 rounded-md border border-gray-200 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full py-1.5 sm:py-2 rounded-md border border-gray-200 text-[11px] sm:text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                   >
-                    View Details
+                    Details
                   </button>
                   <button
                     onClick={() => setConfirmCancel(true)}
-                    className="w-full py-2 rounded-md border border-red-200 text-[13px] font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                    className="w-full py-1.5 sm:py-2 rounded-md border border-red-200 text-[11px] sm:text-[13px] font-semibold text-red-500 hover:bg-red-50 transition-colors"
                   >
                     Cancel
                   </button>
@@ -174,19 +174,19 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate, onCance
                 <>
                   <button
                     onClick={() => onEdit(booking)}
-                    className="w-full py-2 rounded-xl bg-[#e0608a] hover:bg-[#cc5279] text-white text-[13px] font-semibold transition-colors"
+                    className="w-full py-1.5 sm:py-2 rounded-xl bg-[#e0608a] hover:bg-[#cc5279] text-white text-[11px] sm:text-[13px] font-semibold transition-colors"
                   >
                     Reschedule
                   </button>
                   <button
                     onClick={onToggle}
-                    className="w-full py-2 rounded-xl border border-gray-200 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full py-1.5 sm:py-2 rounded-xl border border-gray-200 text-[11px] sm:text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                   >
-                    View Details
+                    Details
                   </button>
                   <button
                     onClick={() => setConfirmCancel(true)}
-                    className="w-full py-2 rounded-xl border border-red-200 text-[13px] font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                    className="w-full py-1.5 sm:py-2 rounded-xl border border-red-200 text-[11px] sm:text-[13px] font-semibold text-red-500 hover:bg-red-50 transition-colors"
                   >
                     Cancel
                   </button>
@@ -197,14 +197,14 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate, onCance
               {booking.status === 'upcoming' &&
                 (booking.api_status === 'active' || booking.api_status === 'in_progress') && (
                 <>
-                  <button className="w-full py-2 rounded-xl bg-[#1f2937] hover:bg-[#111827] text-white text-[13px] font-semibold transition-colors">
+                  <button className="w-full py-1.5 sm:py-2 rounded-xl bg-[#1f2937] hover:bg-[#111827] text-white text-[11px] sm:text-[13px] font-semibold transition-colors">
                     Live Track
                   </button>
                   <button
                     onClick={onToggle}
-                    className="w-full py-2 rounded-xl border border-gray-200 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full py-1.5 sm:py-2 rounded-xl border border-gray-200 text-[11px] sm:text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                   >
-                    View Details
+                    Details
                   </button>
                 </>
               )}
@@ -215,19 +215,19 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate, onCance
                   {!booking.hasClientReview ? (
                     <button
                       onClick={() => onRate({ id: booking.id, service: booking.service, expert: booking.expert })}
-                      className="w-full py-2 rounded-xl bg-[#1f2937] hover:bg-[#111827] text-white text-[13px] font-semibold transition-colors"
+                      className="w-full py-1.5 sm:py-2 rounded-xl bg-[#1f2937] hover:bg-[#111827] text-white text-[11px] sm:text-[13px] font-semibold transition-colors"
                     >
-                      Rate Service
+                      Rate
                     </button>
                   ) : (
-                    <span className="text-sm font-medium text-amber-500 text-right">
+                    <span className="text-xs sm:text-sm font-medium text-amber-500 text-right">
                       {'★'.repeat(booking.clientReviewRating ?? 0)}
                       {'☆'.repeat(5 - (booking.clientReviewRating ?? 0))}
                     </span>
                   )}
                   <button
                     onClick={() => router.push('/client/services')}
-                    className="w-full py-2 rounded-xl border border-gray-200 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full py-1.5 sm:py-2 rounded-xl border border-gray-200 text-[11px] sm:text-[13px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Rebook
                   </button>
@@ -238,7 +238,7 @@ export function BookingCard({ booking, isOpen, onToggle, onEdit, onRate, onCance
               {booking.status === 'cancelled' && (
                 <button
                   onClick={() => router.push('/client/services')}
-                  className="w-full py-2 rounded-xl bg-[#1f2937] hover:bg-[#111827] text-white text-[13px] font-semibold transition-colors"
+                  className="w-full py-1.5 sm:py-2 rounded-xl bg-[#1f2937] hover:bg-[#111827] text-white text-[11px] sm:text-[13px] font-semibold transition-colors"
                 >
                   Rebook
                 </button>

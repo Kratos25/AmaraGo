@@ -13,9 +13,9 @@ export function CategoriesSection({ categories = [] }: Props) {
   if (categories.length === 0) return null;
 
   return (
-    <section className="bg-[#F7F2F6] py-10">
+    <section className="bg-[#F7F2F6] py-8 md:py-10">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
-        <h2 className="text-3xl font-medium text-[#111827] mb-5">Explore Categories</h2>
+        <h2 className="text-xl md:text-3xl font-medium text-[#111827] mb-4 md:mb-5">Explore Categories</h2>
         <div className="flex flex-wrap gap-2">
           {categories.map((cat) => (
             <button

@@ -81,7 +81,7 @@ export function OffersCarousel({ currentUser, onBookNow, onProfile }: Props) {
           {loopCards.map((card, i) => (
             <div
               key={i}
-              className={`flex-shrink-0 w-[320px] md:w-[390px] rounded-[10px] bg-gradient-to-br ${card.gradient} relative overflow-hidden h-[183px]`}
+              className={`flex-shrink-0 w-[min(320px,85vw)] md:w-[390px] rounded-[10px] bg-gradient-to-br ${card.gradient} relative overflow-hidden h-[183px]`}
             >
               {/* Text */}
               <div className="relative p-5 pt-4 z-10">
