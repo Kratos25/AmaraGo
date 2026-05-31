@@ -35,6 +35,8 @@ class CreateMultiBookingRequest(BaseModel):
     time: str = Field(..., description="e.g. '10:00 AM'")
     address_id: Optional[str] = None
     address_text: Optional[str] = Field(None, max_length=500)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     payment_method: Literal["upi", "card", "wallet", "cash"]
     coupon_code: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=500)
@@ -47,6 +49,8 @@ class CreateBookingRequest(BaseModel):
     time: str = Field(..., description="e.g. '10:00 AM'")
     address_id: Optional[str] = None   # saved address id
     address_text: Optional[str] = Field(None, max_length=500)  # or typed text
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     payment_method: Literal["upi", "card", "wallet", "cash"]
     coupon_code: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=500)
@@ -93,6 +97,13 @@ class BookingResponse(BaseModel):
     client_name: Optional[str] = None
     provider_name: Optional[str] = None
     client_phone: Optional[str] = None
+    # Job-offer tracking (set when eligible providers are notified)
+    offered_to: list[str] = []
+    rejected_by: list[str] = []
+    no_providers_in_area: bool = False
+    # Geo coordinates (set when Google Places used at booking time)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     # Reviews (set after job completion)
     client_review: Optional[ReviewDetail] = None
     provider_review: Optional[ReviewDetail] = None

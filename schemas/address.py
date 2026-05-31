@@ -9,6 +9,8 @@ class AddressBase(BaseModel):
     address: str = Field(..., min_length=5, max_length=500)
     icon: str = Field(default="📍", max_length=10)
     is_default: bool = False
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class CreateAddressRequest(AddressBase):

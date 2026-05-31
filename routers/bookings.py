@@ -14,6 +14,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from google.cloud import firestore as gc_firestore
+from pydantic import BaseModel
 
 from firebase_admin.firestore import Increment
 from firebase_config import get_db
@@ -33,6 +34,183 @@ from schemas.booking import (
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
 
 CONVENIENCE_FEE = 99.0
+
+
+# ── Paginated response model ───────────────────────────────────────────────────
+
+class PaginatedBookings(BaseModel):
+    items: list[BookingResponse]
+    next_cursor: Optional[str] = None
+
+
+# ── Platform stats helper (HIGH-02) ───────────────────────────────────────────
+
+def _update_platform_stats(
+    db,
+    old_status: str,
+    new_status: str,
+    revenue_delta: float = 0.0,
+) -> None:
+    """Atomically update _stats/platform counter doc for a booking status transition."""
+    updates: dict = {}
+    if old_status == "pending":
+        updates["pending_bookings"] = Increment(-1)
+    elif old_status in ("confirmed", "active"):
+        updates["active_bookings"] = Increment(-1)
+
+    if new_status == "pending":
+        updates["pending_bookings"] = Increment(1)
+    elif new_status in ("confirmed", "active"):
+        updates["active_bookings"] = Increment(1)
+    elif new_status == "completed":
+        updates["completed_bookings"] = Increment(1)
+        if revenue_delta > 0:
+            updates["total_revenue"] = Increment(revenue_delta)
+    elif new_status == "cancelled":
+        updates["cancelled_bookings"] = Increment(1)
+
+    if updates:
+        db.collection("_stats").document("platform").set(updates, merge=True)
+
+
+# ── Notification writer (HIGH-07) ─────────────────────────────────────────────
+
+def _write_notification(
+    db,
+    user_id: str,
+    notif_type: str,
+    title: str,
+    message: str,
+    reference_id: str,
+) -> None:
+    """Persist a notification document to the notifications collection."""
+    try:
+        db.collection("notifications").document().set({
+            "user_id": user_id,
+            "type": notif_type,
+            "title": title,
+            "message": message,
+            "reference_id": reference_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "is_read": False,
+        })
+    except Exception:
+        pass  # Notification failure must never break the primary operation
+
+
+# ── City extraction ───────────────────────────────────────────────────────────
+
+def _extract_city(location: str) -> str:
+    """Extract city from 'Area, City' or plain 'City' — lowercased."""
+    if not location:
+        return ""
+    parts = location.rsplit(",", 1)
+    return parts[-1].strip().lower()
+
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance in kilometres between two lat/lng points."""
+    import math
+    R = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+# ── Notify eligible providers in the booking city ────────────────────────────
+
+def _notify_eligible_providers(
+    db,
+    booking_id: str,
+    booking_city: str,
+    service_names: list[str],
+    client_name: str,
+    client_id: str,
+    date: str,
+    booking_lat: float | None = None,
+    booking_lng: float | None = None,
+) -> list[str]:
+    """Find approved providers who serve the booking location and offer at least
+    one of `service_names`, notify each, record UIDs in `offered_to`.
+
+    Matching strategy (in priority order):
+      1. Radius  — if booking has lat/lng AND provider has lat/lng:
+                   provider's `service_radius_km` determines the circle.
+      2. City    — fallback string match on the last segment of the
+                   location field (e.g. "Bandra, Mumbai" → "mumbai").
+
+    If no eligible providers are found the client is notified immediately.
+    """
+    try:
+        prov_docs = (
+            db.collection("provider_profiles")
+            .where("is_approved", "==", True)
+            .stream()
+        )
+
+        use_geo = booking_lat is not None and booking_lng is not None
+        target_services = {s.strip().lower() for s in service_names if s}
+
+        eligible: list[str] = []
+        for prov in prov_docs:
+            prov_data = prov.to_dict()
+
+            # ── Service filter (always applied) ──────────────────────────────
+            prov_services = {
+                s.strip().lower()
+                for s in prov_data.get("services_offered", [])
+                if s
+            }
+            if not prov_services.intersection(target_services):
+                continue
+
+            # ── Location filter ───────────────────────────────────────────────
+            prov_lat = prov_data.get("latitude")
+            prov_lng = prov_data.get("longitude")
+
+            if use_geo and prov_lat is not None and prov_lng is not None:
+                radius_km = float(prov_data.get("service_radius_km", 15.0))
+                dist = _haversine_km(booking_lat, booking_lng, prov_lat, prov_lng)
+                if dist > radius_km:
+                    continue
+            else:
+                # Fallback: city-string match
+                prov_city = _extract_city(prov_data.get("location", ""))
+                if prov_city != booking_city.lower():
+                    continue
+
+            eligible.append(prov.id)
+            display_name = (
+                " & ".join(service_names) if len(service_names) <= 2
+                else f"{service_names[0]} + {len(service_names) - 1} more"
+            )
+            _write_notification(
+                db, prov.id, "job_offer",
+                "New Job Available 🛎️",
+                f"{display_name} for {client_name} on {date} — tap to accept or decline",
+                booking_id,
+            )
+
+        if eligible:
+            db.collection("bookings").document(booking_id).update(
+                {"offered_to": eligible}
+            )
+        else:
+            db.collection("bookings").document(booking_id).update(
+                {"no_providers_in_area": True}
+            )
+            _write_notification(
+                db, client_id, "no_providers",
+                "We're on it! 🔍",
+                "No provider is available in your area right now. Our team is working on it and will assign one for you soon.",
+                booking_id,
+            )
+
+        return eligible
+    except Exception:
+        return []  # Never block the booking creation
 
 
 # ── Booking reference ID (AG0001 … AG9999 … AG10000 …) ────────────────────
@@ -84,8 +262,8 @@ def _get_service_price(db, service_id: Optional[str], package_id: Optional[str])
     raise HTTPException(status_code=400, detail="Provide either service_id or package_id.")
 
 
-def _apply_coupon(db, code: Optional[str], base_price: float) -> float:
-    """Return discount amount (0 if code is invalid)."""
+def _apply_coupon(db, code: Optional[str], base_price: float, client_id: Optional[str] = None) -> float:
+    """Return discount amount (0 if code is invalid or expired)."""
     if not code:
         return 0.0
     docs = db.collection("coupons").where("code", "==", code.upper()).get()
@@ -98,6 +276,24 @@ def _apply_coupon(db, code: Optional[str], base_price: float) -> float:
         return 0.0
     if base_price < c.get("min_order", 0):
         return 0.0
+    # ── Date range validation ────────────────────────────────────────────────
+    today = datetime.now(timezone.utc).date().isoformat()
+    valid_from = c.get("valid_from", "")
+    valid_to = c.get("valid_to", "")
+    if valid_from and today < valid_from:
+        return 0.0
+    if valid_to and today > valid_to:
+        return 0.0
+    # ── applicable_for check ────────────────────────────────────────────────
+    applicable_for = c.get("applicable_for", "all")
+    if applicable_for == "new_users" and client_id:
+        existing = db.collection("bookings").where("client_id", "==", client_id).limit(1).get()
+        if existing:  # already has a booking → not a new user
+            return 0.0
+    elif applicable_for == "returning" and client_id:
+        existing = db.collection("bookings").where("client_id", "==", client_id).limit(1).get()
+        if not existing:  # no prior bookings → not a returning user
+            return 0.0
     if c["type"] == "percentage":
         discount = round(base_price * c["value"] / 100, 2)
         if c.get("max_discount"):
@@ -135,6 +331,11 @@ def _doc_to_booking(doc) -> BookingResponse:
         client_name=d.get("client_name"),
         provider_name=d.get("provider_name"),
         client_phone=d.get("client_phone"),
+        offered_to=d.get("offered_to", []),
+        rejected_by=d.get("rejected_by", []),
+        no_providers_in_area=d.get("no_providers_in_area", False),
+        latitude=d.get("latitude"),
+        longitude=d.get("longitude"),
         client_review=ReviewDetail(**d["client_review"]) if d.get("client_review") else None,
         provider_review=ReviewDetail(**d["provider_review"]) if d.get("provider_review") else None,
     )
@@ -182,7 +383,7 @@ async def create_multi_booking(
         if cart_item.package_id:
             package_ids.append(cart_item.package_id)
 
-    discount = _apply_coupon(db, body.coupon_code, base_total)
+    discount = _apply_coupon(db, body.coupon_code, base_total, current_user.uid)
     total    = round(base_total - discount + CONVENIENCE_FEE, 2)
 
     # Build human-readable summary name
@@ -224,6 +425,10 @@ async def create_multi_booking(
         "status":         "pending",
         "notes":          body.notes,
         "created_at":     now,
+        "offered_to":     [],
+        "rejected_by":    [],
+        "latitude":       body.latitude,
+        "longitude":      body.longitude,
     })
 
     # Mark coupon used (once per booking)
@@ -237,6 +442,28 @@ async def create_multi_booking(
         db.collection("services").document(sid).update({"total_bookings": Increment(1)})
     for pid in package_ids:
         db.collection("packages").document(pid).update({"total_bookings": Increment(1)})
+
+    # HIGH-02: increment platform stats
+    db.collection("_stats").document("platform").set(
+        {"total_bookings": Increment(1), "pending_bookings": Increment(1)}, merge=True
+    )
+    # HIGH-07: notify admin of new booking
+    _write_notification(
+        db, "admin", "new_booking", "New Booking",
+        f"{user_data.get('name', 'A client')} booked {summary_name} for {body.date}",
+        ref.id,
+    )
+
+    # Notify eligible providers in the same city
+    booking_city = _extract_city(body.address)
+    _notify_eligible_providers(
+        db, ref.id, booking_city, names,
+        user_data.get("name", "A client"),
+        current_user.uid,
+        body.date,
+        booking_lat=body.latitude,
+        booking_lng=body.longitude,
+    )
 
     return _doc_to_booking(ref.get())
 
@@ -255,16 +482,18 @@ async def create_booking(
 
     address = _resolve_address(db, body.address_id, body.address_text, current_user.uid)
     base_price, service_name = _get_service_price(db, body.service_id, body.package_id)
-    discount = _apply_coupon(db, body.coupon_code, base_price)
+    discount = _apply_coupon(db, body.coupon_code, base_price, current_user.uid)
     total = round(base_price - discount + CONVENIENCE_FEE, 2)
 
     # Fetch client name/phone for display
     user_doc = db.collection("users").document(current_user.uid).get()
     user_data = user_doc.to_dict() if user_doc.exists else {}
 
+    booking_ref = _generate_booking_ref(db)
     now = datetime.now(timezone.utc).isoformat()
     ref = db.collection("bookings").document()
     ref.set({
+        "booking_ref": booking_ref,
         "client_id": current_user.uid,
         "client_name": user_data.get("name", ""),
         "client_phone": user_data.get("phone", ""),
@@ -285,6 +514,10 @@ async def create_booking(
         "status": "pending",
         "notes": body.notes,
         "created_at": now,
+        "offered_to": [],
+        "rejected_by": [],
+        "latitude": body.latitude,
+        "longitude": body.longitude,
     })
 
     # Mark coupon used
@@ -303,36 +536,67 @@ async def create_booking(
             {"total_bookings": Increment(1)}
         )
 
+    # HIGH-02: increment platform stats
+    db.collection("_stats").document("platform").set(
+        {"total_bookings": Increment(1), "pending_bookings": Increment(1)}, merge=True
+    )
+    # HIGH-07: notify admin of new booking
+    _write_notification(
+        db, "admin", "new_booking", "New Booking",
+        f"{user_data.get('name', 'A client')} booked {service_name} for {body.date}",
+        ref.id,
+    )
+
+    # Notify eligible providers in the same city
+    booking_city = _extract_city(address)
+    _notify_eligible_providers(
+        db, ref.id, booking_city, [service_name],
+        user_data.get("name", "A client"),
+        current_user.uid,
+        body.date,
+        booking_lat=body.latitude,
+        booking_lng=body.longitude,
+    )
+
     return _doc_to_booking(ref.get())
 
 
 # ── List bookings ─────────────────────────────────────────────────────────────
 
-@router.get("", response_model=list[BookingResponse])
+@router.get("", response_model=PaginatedBookings)
 async def list_bookings(
     status: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     db = get_db()
-    query = db.collection("bookings")
+    col = db.collection("bookings")
 
     if current_user.role == "admin":
-        if status:
-            query = query.where("status", "==", status)
+        q = col.where("status", "==", status) if status else col
     elif current_user.role == "service_provider":
-        query = query.where("provider_id", "==", current_user.uid)
+        q = col.where("provider_id", "==", current_user.uid)
         if status:
-            query = query.where("status", "==", status)
+            q = q.where("status", "==", status)
     else:
-        # client
-        query = query.where("client_id", "==", current_user.uid)
+        q = col.where("client_id", "==", current_user.uid)
         if status:
-            query = query.where("status", "==", status)
+            q = q.where("status", "==", status)
 
-    docs = query.stream()
-    bookings = [_doc_to_booking(d) for d in docs]
-    bookings.sort(key=lambda b: b.created_at or "", reverse=True)
-    return bookings
+    q = q.order_by("created_at", direction=gc_firestore.Query.DESCENDING).limit(limit + 1)
+    if cursor:
+        cursor_doc = col.document(cursor).get()
+        if cursor_doc.exists:
+            q = q.start_after(cursor_doc)
+
+    docs = list(q.stream())
+    has_next = len(docs) > limit
+    page_docs = docs[:limit]
+    items = [_doc_to_booking(d) for d in page_docs]
+    next_cursor = page_docs[-1].id if (has_next and page_docs) else None
+
+    return PaginatedBookings(items=items, next_cursor=next_cursor)
 
 
 # ── Get booking detail ────────────────────────────────────────────────────────
@@ -365,8 +629,10 @@ async def assign_provider(
 ):
     db = get_db()
     ref = db.collection("bookings").document(booking_id)
-    if not ref.get().exists:
+    doc = ref.get()
+    if not doc.exists:
         raise HTTPException(status_code=404, detail="Booking not found.")
+    d = doc.to_dict()
 
     # Fetch provider name
     prov_doc = db.collection("users").document(body.provider_id).get()
@@ -374,11 +640,41 @@ async def assign_provider(
         raise HTTPException(status_code=404, detail="Provider not found.")
     prov_name = prov_doc.to_dict().get("name", "")
 
+    # HIGH-05: Prevent double-booking — check provider has no confirmed/active booking at same slot
+    booking_date = d.get("date")
+    booking_time = d.get("time")
+    if booking_date and booking_time:
+        conflicts = (
+            db.collection("bookings")
+            .where("provider_id", "==", body.provider_id)
+            .where("date", "==", booking_date)
+            .where("time", "==", booking_time)
+            .where("status", "in", ["confirmed", "active"])
+            .limit(1)
+            .get()
+        )
+        if conflicts and conflicts[0].id != booking_id:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Provider already has a booking at {booking_date} {booking_time}.",
+            )
+
     ref.update({
         "provider_id": body.provider_id,
         "provider_name": prov_name,
         "status": "confirmed",
     })
+
+    # HIGH-02: Update platform stats — pending → confirmed (active bucket)
+    _update_platform_stats(db, d.get("status", "pending"), "confirmed")
+
+    # HIGH-07: Notify provider of new job assignment
+    _write_notification(
+        db, body.provider_id, "booking_assigned", "New Job Assigned",
+        f"You have been assigned: {d.get('service_name', 'a service')} for {d.get('client_name', 'a client')} on {booking_date}",
+        booking_id,
+    )
+
     return _doc_to_booking(ref.get())
 
 
@@ -410,8 +706,28 @@ async def update_booking_status(
             raise HTTPException(status_code=403, detail="Access denied.")
         if body.status not in ("active", "completed"):
             raise HTTPException(status_code=403, detail="Providers can only mark jobs active or completed.")
+        # HIGH-08: Provider cannot mark a future booking as completed
+        if body.status == "completed":
+            booking_date_str = d.get("date", "")
+            if booking_date_str:
+                try:
+                    booking_date = datetime.strptime(booking_date_str, "%Y-%m-%d").date()
+                    if booking_date > datetime.now(timezone.utc).date():
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Cannot mark a future booking as completed.",
+                        )
+                except ValueError:
+                    pass
 
+    old_status = d.get("status", "pending")
     ref.update({"status": body.status})
+
+    # HIGH-02: Update platform stats counter
+    _update_platform_stats(
+        db, old_status, body.status,
+        revenue_delta=float(d.get("total_price", 0)) if body.status == "completed" else 0.0,
+    )
 
     # On completion: create earnings record
     if body.status == "completed" and d.get("provider_id"):
@@ -473,6 +789,21 @@ async def update_booking_status(
                 "description": f"Earned {points_earned} pts for booking #{booking_id[:8]}",
             })
 
+        # HIGH-07: Notify client that service is completed
+        _write_notification(
+            db, client_id, "booking_completed", "Service Completed! ✅",
+            f"Your {d.get('service_name', 'service')} booking has been completed. Rate your experience!",
+            booking_id,
+        )
+
+    # HIGH-07: Notify provider when their booking is cancelled
+    if body.status == "cancelled" and d.get("provider_id"):
+        _write_notification(
+            db, d["provider_id"], "booking_cancelled", "Booking Cancelled",
+            f"{d.get('client_name', 'Client')}'s {d.get('service_name', 'service')} booking on {d.get('date', '')} was cancelled.",
+            booking_id,
+        )
+
     return _doc_to_booking(ref.get())
 
 
@@ -530,6 +861,86 @@ async def cancel_booking(
     if d.get("status") not in ("pending", "confirmed"):
         raise HTTPException(status_code=400, detail="Cannot cancel a booking that is active or completed.")
     ref.update({"status": "cancelled"})
+    # HIGH-02: Update platform stats
+    _update_platform_stats(db, d.get("status", "pending"), "cancelled")
+
+
+# ── Provider accept job offer ─────────────────────────────────────────────────
+
+@router.post("/{booking_id}/accept", response_model=BookingResponse)
+async def accept_job_offer(
+    booking_id: str,
+    current_user: CurrentUser = Depends(require_role("service_provider")),
+):
+    """Provider self-assigns to a pending booking that was offered to them."""
+    db = get_db()
+    ref = db.collection("bookings").document(booking_id)
+    doc = ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Booking not found.")
+    d = doc.to_dict()
+
+    if d.get("status") != "pending":
+        raise HTTPException(status_code=409, detail="Booking is no longer available.")
+    if current_user.uid not in d.get("offered_to", []):
+        raise HTTPException(status_code=403, detail="This booking was not offered to you.")
+    if current_user.uid in d.get("rejected_by", []):
+        raise HTTPException(status_code=409, detail="You already rejected this booking.")
+
+    # Slot conflict check
+    booking_date = d.get("date")
+    booking_time = d.get("time")
+    if booking_date and booking_time:
+        conflicts = (
+            db.collection("bookings")
+            .where("provider_id", "==", current_user.uid)
+            .where("date", "==", booking_date)
+            .where("time", "==", booking_time)
+            .where("status", "in", ["confirmed", "active"])
+            .limit(1)
+            .get()
+        )
+        if conflicts:
+            raise HTTPException(status_code=409, detail="You already have a booking at this time slot.")
+
+    prov_doc = db.collection("users").document(current_user.uid).get()
+    prov_name = (prov_doc.to_dict() or {}).get("name", "")
+    ref.update({
+        "provider_id":   current_user.uid,
+        "provider_name": prov_name,
+        "status":        "confirmed",
+    })
+    _update_platform_stats(db, "pending", "confirmed")
+    _write_notification(
+        db, d.get("client_id"), "booking_confirmed",
+        "Provider Assigned!",
+        f"A provider has accepted your booking for {d.get('date')}.",
+        booking_id,
+    )
+    return _doc_to_booking(ref.get())
+
+
+# ── Provider reject job offer ─────────────────────────────────────────────────
+
+@router.post("/{booking_id}/reject", response_model=BookingResponse)
+async def reject_job_offer(
+    booking_id: str,
+    current_user: CurrentUser = Depends(require_role("service_provider")),
+):
+    """Provider declines a pending booking that was offered to them."""
+    db = get_db()
+    ref = db.collection("bookings").document(booking_id)
+    doc = ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Booking not found.")
+    d = doc.to_dict()
+
+    if current_user.uid not in d.get("offered_to", []):
+        raise HTTPException(status_code=403, detail="This booking was not offered to you.")
+
+    from google.cloud.firestore import ArrayUnion
+    ref.update({"rejected_by": ArrayUnion([current_user.uid])})
+    return _doc_to_booking(ref.get())
 
 
 # ── Client reviews provider + service ────────────────────────────────────────────
@@ -562,33 +973,43 @@ async def submit_provider_review(
     }
     ref.update({"client_review": review_data})
 
-    # ── Recalculate provider rating ───────────────────────────────────────────────
+    # HIGH-03: Incremental running average for provider rating (no O(n) scan)
     provider_id = d.get("provider_id")
     if provider_id:
-        prov_bookings = db.collection("bookings").where("provider_id", "==", provider_id).stream()
-        prov_ratings = [
-            bk.to_dict()["client_review"]["rating"]
-            for bk in prov_bookings
-            if bk.to_dict().get("client_review")
-        ]
-        if prov_ratings:
-            db.collection("provider_profiles").document(provider_id).update(
-                {"rating": round(sum(prov_ratings) / len(prov_ratings), 2)}
-            )
+        prov_ref = db.collection("provider_profiles").document(provider_id)
+        prov_data = prov_ref.get().to_dict() or {}
+        old_count = int(prov_data.get("rating_count", 0))
+        old_sum = float(prov_data.get("rating_sum", 0.0))
+        new_count = old_count + 1
+        new_sum = old_sum + body.rating
+        prov_ref.update({
+            "rating": round(new_sum / new_count, 2),
+            "rating_count": new_count,
+            "rating_sum": new_sum,
+        })
+        # HIGH-07: Notify provider of new rating
+        stars = "★" * body.rating
+        _write_notification(
+            db, provider_id, "new_rating", "New Rating Received",
+            f"{d.get('client_name', 'A client')} rated your service {stars}" +
+            (f': "{body.comment}"' if body.comment else ""),
+            booking_id,
+        )
 
-    # ── Recalculate service rating ────────────────────────────────────────────────
+    # HIGH-03: Incremental running average for service rating
     service_id = d.get("service_id")
     if service_id:
-        svc_bookings = db.collection("bookings").where("service_id", "==", service_id).stream()
-        svc_ratings = [
-            bk.to_dict()["client_review"]["rating"]
-            for bk in svc_bookings
-            if bk.to_dict().get("client_review")
-        ]
-        if svc_ratings:
-            db.collection("services").document(service_id).update(
-                {"rating": round(sum(svc_ratings) / len(svc_ratings), 2)}
-            )
+        svc_ref = db.collection("services").document(service_id)
+        svc_data = svc_ref.get().to_dict() or {}
+        old_count = int(svc_data.get("rating_count", 0))
+        old_sum = float(svc_data.get("rating_sum", 0.0))
+        new_count = old_count + 1
+        new_sum = old_sum + body.rating
+        svc_ref.update({
+            "rating": round(new_sum / new_count, 2),
+            "rating_count": new_count,
+            "rating_sum": new_sum,
+        })
 
     return _doc_to_booking(ref.get())
 

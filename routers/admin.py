@@ -63,37 +63,34 @@ async def get_dashboard(
         1 for _ in db.collection("users").where("role", "==", "client").stream()
     )
 
-    # ── Bookings (single pass — weekly + health metrics) ─────────────────────
+    # HIGH-02: Read KPI totals from _stats/platform counter doc
+    stats_doc = db.collection("_stats").document("platform").get()
+    stats_data = stats_doc.to_dict() if stats_doc.exists else {}
+    total_bookings = int(stats_data.get("total_bookings", 0))
+    completed      = int(stats_data.get("completed_bookings", 0))
+    pending        = int(stats_data.get("pending_bookings", 0))
+    active         = int(stats_data.get("active_bookings", 0))
+    revenue        = float(stats_data.get("total_revenue", 0.0))
+
+    # HIGH-02: Weekly breakdown — only scan last 7 days
     weekly_revenue  = [0.0] * 7
     weekly_bookings = [0]   * 7
     weekly_labels   = [
         (now - timedelta(days=i)).strftime("%a") for i in range(6, -1, -1)
     ]
+    weekly_assigned = 0
+    weekly_total    = 0
 
-    total_bookings = 0
-    completed      = 0
-    pending        = 0
-    active         = 0
-    revenue        = 0.0
-    assigned       = 0   # bookings with a provider assigned
+    seven_days_ago_iso = (now - timedelta(days=6)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).isoformat()
 
-    for doc in db.collection("bookings").stream():
-        total_bookings += 1
+    for doc in db.collection("bookings").where("created_at", ">=", seven_days_ago_iso).stream():
         d = doc.to_dict()
+        weekly_total += 1
         s = d.get("status", "")
-
-        if s == "completed":
-            completed += 1
-            revenue += float(d.get("total_price", 0))
-        elif s == "pending":
-            pending += 1
-        elif s in ("confirmed", "active"):
-            active += 1
-
         if d.get("provider_id"):
-            assigned += 1
-
-        # Weekly grouping by created_at
+            weekly_assigned += 1
         created_raw = d.get("created_at", "")
         if created_raw:
             try:
@@ -113,7 +110,7 @@ async def get_dashboard(
         round(completed / total_bookings * 100, 1) if total_bookings else 0.0
     )
     provider_fill_rate = (
-        round(assigned / total_bookings * 100, 1) if total_bookings else 0.0
+        round(weekly_assigned / weekly_total * 100, 1) if weekly_total else 0.0
     )
 
     return DashboardStats(
@@ -343,38 +340,40 @@ async def get_notifications(
     db = get_db()
     notifications: list[Notification] = []
 
-    # New / unassigned bookings (pending status = needs provider)
-    # Note: order_by + where on different fields requires a composite index,
-    # so we fetch and sort in Python instead.
-    pending_bookings = (
-        db.collection("bookings")
-        .where("status", "==", "pending")
-        .limit(20)
+    # HIGH-07: Read stored notifications for admin from the notifications collection
+    stored_docs = (
+        db.collection("notifications")
+        .where("user_id", "==", "admin")
+        .limit(50)
         .stream()
     )
-    for doc in pending_bookings:
+    for doc in stored_docs:
         d = doc.to_dict()
         notifications.append(Notification(
-            id=f"booking_{doc.id}",
-            type="new_booking",
-            title="New Booking",
-            message=f"{d.get('client_name', 'A client')} booked {d.get('service_name', 'a service')} for {d.get('date', '')}",
-            reference_id=doc.id,
+            id=doc.id,
+            type=d.get("type", "new_booking"),
+            title=d.get("title", ""),
+            message=d.get("message", ""),
+            reference_id=d.get("reference_id", ""),
             created_at=d.get("created_at"),
         ))
 
-    # Providers awaiting approval
+    # Dynamic: pending provider approvals (these aren't written as stored notifications yet)
+    existing_ids = {n.id for n in notifications}
     pending_providers = (
         db.collection("provider_profiles")
         .where("is_approved", "==", False)
         .stream()
     )
     for doc in pending_providers:
+        notif_id = f"provider_{doc.id}"
+        if notif_id in existing_ids:
+            continue
         user_doc = db.collection("users").document(doc.id).get()
         name = user_doc.to_dict().get("name", "A provider") if user_doc.exists else "A provider"
         created_at = user_doc.to_dict().get("created_at") if user_doc.exists else None
         notifications.append(Notification(
-            id=f"provider_{doc.id}",
+            id=notif_id,
             type="pending_approval",
             title="Provider Approval Pending",
             message=f"{name} has applied to join as a service provider",
@@ -382,7 +381,7 @@ async def get_notifications(
             created_at=created_at,
         ))
 
-    # Sort newest-first in Python (avoids composite index requirement)
+    # Sort newest-first in Python
     notifications.sort(
         key=lambda n: (n.created_at.isoformat() if hasattr(n.created_at, "isoformat") else str(n.created_at or "")),
         reverse=True,

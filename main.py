@@ -8,13 +8,21 @@ Start:
 from __future__ import annotations
 
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
 
-from routers import auth, users, categories, services, packages, coupons, addresses, bookings, providers, admin, cart, loyalty
+from routers import auth, users, categories, services, packages, coupons, addresses, bookings, providers, admin, cart, loyalty, wishlist, payments
 
 load_dotenv()
+
+# ── Rate Limiter ──────────────────────────────────────────────────────────────
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
@@ -26,6 +34,9 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # ── CORS ──────────────────────────────────────────────────────────────────────
 
 _raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
@@ -35,8 +46,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Guest-Id"],
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
@@ -53,6 +64,8 @@ app.include_router(providers.router)
 app.include_router(admin.router)
 app.include_router(cart.router)
 app.include_router(loyalty.router)
+app.include_router(wishlist.router)
+app.include_router(payments.router)
 
 # ── Health check ──────────────────────────────────────────────────────────────
 

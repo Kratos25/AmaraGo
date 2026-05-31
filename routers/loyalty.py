@@ -12,6 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 
 from firebase_config import get_db
+from google.cloud.firestore import Query as FSQuery
 from dependencies.auth import CurrentUser, get_current_user
 from schemas.user import (
     TIER_BENEFITS,
@@ -68,6 +69,7 @@ async def get_points_history(current_user: CurrentUser = Depends(get_current_use
     docs = (
         db.collection("loyalty_transactions")
         .where("client_id", "==", current_user.uid)
+        .order_by("created_at", direction=FSQuery.DESCENDING)
         .limit(50)
         .stream()
     )
@@ -82,5 +84,4 @@ async def get_points_history(current_user: CurrentUser = Depends(get_current_use
             created_at=d.get("created_at"),
             description=d.get("description", "Booking reward"),
         ))
-    results.sort(key=lambda r: r.created_at or "", reverse=True)
     return results

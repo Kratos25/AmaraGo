@@ -20,7 +20,7 @@ import urllib.parse
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-import requests as http_requests
+import httpx
 
 from firebase_config import get_bucket, get_db
 from dependencies.auth import CurrentUser, get_current_user, require_role
@@ -54,6 +54,9 @@ def _build_profile(uid: str, user_data: dict, provider_data: dict) -> ProviderPr
         experience_years=provider_data.get("experience_years", 0),
         services_offered=provider_data.get("services_offered", []),
         location=provider_data.get("location", ""),
+        latitude=provider_data.get("latitude"),
+        longitude=provider_data.get("longitude"),
+        service_radius_km=provider_data.get("service_radius_km", 15.0),
         certifications=provider_data.get("certifications", []),
         portfolio=provider_data.get("portfolio", []),
         rating=provider_data.get("rating", 0.0),
@@ -91,6 +94,11 @@ def _doc_to_booking(doc) -> BookingResponse:
         client_name=d.get("client_name"),
         provider_name=d.get("provider_name"),
         client_phone=d.get("client_phone"),
+        offered_to=d.get("offered_to", []),
+        rejected_by=d.get("rejected_by", []),
+        no_providers_in_area=d.get("no_providers_in_area", False),
+        latitude=d.get("latitude"),
+        longitude=d.get("longitude"),
     )
 
 
@@ -202,15 +210,16 @@ async def upload_provider_file(
         cred.refresh(gtr.Request())
         token = cred.token
 
-        resp = http_requests.post(
-            upload_url,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type":  content_type,
-            },
-            data=data,
-            timeout=60,
-        )
+        resp_data = None
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                upload_url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type":  content_type,
+                },
+                content=data,
+            )
         if resp.status_code not in (200, 201):
             raise HTTPException(
                 status_code=500,
@@ -268,6 +277,29 @@ async def get_my_jobs(
     bookings = [_doc_to_booking(d) for d in docs]
     bookings.sort(key=lambda b: b.date, reverse=True)
     return bookings
+
+
+# ── Provider's job offers (city-matched, pending accept/reject) ───────────────
+
+@router.get("/me/job-offers", response_model=list[BookingResponse])
+async def get_my_job_offers(
+    current_user: CurrentUser = Depends(require_role("service_provider")),
+):
+    """Return pending bookings offered to this provider that they haven't rejected."""
+    db = get_db()
+    docs = (
+        db.collection("bookings")
+        .where("offered_to", "array_contains", current_user.uid)
+        .where("status", "==", "pending")
+        .stream()
+    )
+    result = []
+    for doc in docs:
+        d = doc.to_dict()
+        if current_user.uid not in d.get("rejected_by", []):
+            result.append(_doc_to_booking(doc))
+    result.sort(key=lambda b: b.created_at or datetime.datetime.min, reverse=True)
+    return result
 
 
 # ── Provider's earnings ───────────────────────────────────────────────────────
@@ -359,76 +391,29 @@ async def get_my_notifications(
     current_user: CurrentUser = Depends(require_role("service_provider", "pending_sp")),
 ):
     """
-    Returns recent notifications for the authenticated provider:
-    - New bookings assigned in the last 30 days
-    - Ratings posted by clients in the last 30 days
-    - Bookings cancelled by client
+    Returns recent notifications for the authenticated provider from the
+    notifications collection (written by booking events).
     """
-    from datetime import timedelta
     db = get_db()
     notifications: list[ProviderNotification] = []
 
-    cutoff = (datetime.datetime.now(datetime.timezone.utc) - timedelta(days=30)).isoformat()
-
-    # Load bookings assigned to this provider
-    bookings = (
-        db.collection("bookings")
-        .where("provider_id", "==", current_user.uid)
+    # HIGH-07: Read from stored notifications collection
+    stored_docs = (
+        db.collection("notifications")
+        .where("user_id", "==", current_user.uid)
+        .limit(50)
         .stream()
     )
-
-    for doc in bookings:
+    for doc in stored_docs:
         d = doc.to_dict()
-        created_at = d.get("created_at") or ""
-        if isinstance(created_at, datetime.datetime):
-            created_at = created_at.isoformat()
-
-        # Skip old entries
-        if str(created_at) < cutoff:
-            continue
-
-        status = d.get("status", "")
-        client_name = d.get("client_name") or "A client"
-        service_name = d.get("service_name") or "a service"
-        date = d.get("date", "")
-
-        # New booking assigned
         notifications.append(ProviderNotification(
-            id=f"booking_{doc.id}",
-            type="new_booking",
-            title="New Job Assigned",
-            message=f"{client_name} booked {service_name} on {date}",
-            reference_id=doc.id,
-            created_at=created_at,
+            id=doc.id,
+            type=d.get("type", "new_booking"),
+            title=d.get("title", ""),
+            message=d.get("message", ""),
+            reference_id=d.get("reference_id", ""),
+            created_at=d.get("created_at"),
         ))
-
-        # Rating received
-        review = d.get("client_review")
-        if review:
-            review_at = review.get("created_at") or created_at
-            if isinstance(review_at, datetime.datetime):
-                review_at = review_at.isoformat()
-            stars = "★" * int(review.get("rating", 5))
-            comment = review.get("comment") or ""
-            notifications.append(ProviderNotification(
-                id=f"rating_{doc.id}",
-                type="new_rating",
-                title="New Rating Received",
-                message=f"{client_name} rated you {stars}" + (f': "{comment}"' if comment else ""),
-                reference_id=doc.id,
-                created_at=str(review_at),
-            ))
-
-        # Booking cancelled
-        if status == "cancelled":
-            notifications.append(ProviderNotification(
-                id=f"cancel_{doc.id}",
-                type="booking_cancelled",
-                title="Booking Cancelled",
-                message=f"{client_name}'s {service_name} booking was cancelled",
-                reference_id=doc.id,
-                created_at=created_at,
-            ))
 
     # Sort newest-first
     notifications.sort(
@@ -493,6 +478,27 @@ async def set_provider_approval(
     new_role = "service_provider" if body.approved else "client"
     if user_ref.get().exists:
         user_ref.update({"role": new_role})
+
+    # HIGH-07: Notify provider of approval/rejection decision
+    try:
+        now_iso = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        if body.approved:
+            notif_title = "Application Approved! 🎉"
+            notif_msg = "Congratulations! Your service provider application has been approved. You can now accept bookings."
+        else:
+            notif_title = "Application Decision"
+            notif_msg = f"Your service provider application was not approved." + (f" Reason: {body.reason}" if getattr(body, "reason", None) else "")
+        db.collection("notifications").document().set({
+            "user_id": uid,
+            "type": "account_approved" if body.approved else "account_rejected",
+            "title": notif_title,
+            "message": notif_msg,
+            "reference_id": uid,
+            "created_at": now_iso,
+            "is_read": False,
+        })
+    except Exception:
+        pass
 
     return {
         "uid": uid,

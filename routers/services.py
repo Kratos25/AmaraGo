@@ -22,9 +22,10 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from google.cloud.firestore import Increment  # noqa: F401 – used in later routes
 
 from firebase_config import get_db
-from dependencies.auth import CurrentUser, require_role
+from dependencies.auth import CurrentUser, get_optional_current_user, require_role
 from schemas.service import (
     CreateServiceRequest,
     ServiceResponse,
@@ -62,12 +63,17 @@ async def list_services(
     popular: Optional[bool] = Query(None),
     active: Optional[bool] = Query(None),
     all: Optional[bool] = Query(None, alias="all"),
+    search: Optional[str] = Query(None, max_length=100),
+    current_user: Optional[CurrentUser] = Depends(get_optional_current_user),
 ):
     db = get_db()
     query = db.collection("services")
 
-    # If `all=true` is explicitly passed (admin use), skip status filter
-    if not all:
+    # `all=true` returns every service regardless of active status — admin only
+    if all:
+        if current_user is None or current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required.")
+    else:
         if active is False:
             query = query.where("active", "==", False)
         elif active is True:
@@ -82,7 +88,17 @@ async def list_services(
         query = query.where("popular", "==", popular)
 
     docs = query.stream()
-    return [_doc_to_service(d) for d in docs]
+    results = [_doc_to_service(d) for d in docs]
+
+    # Server-side search filter (case-insensitive substring match on name + description)
+    if search:
+        q = search.lower()
+        results = [
+            s for s in results
+            if q in s.name.lower() or q in (s.description or "").lower()
+        ]
+
+    return results
 
 
 @router.get("/{service_id}", response_model=ServiceResponse)

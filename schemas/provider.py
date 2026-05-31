@@ -23,6 +23,9 @@ class ProviderProfileBase(BaseModel):
     experience_years: int = Field(default=0, ge=0, le=50)
     services_offered: list[str] = Field(default_factory=list)
     location: str = Field(default="", max_length=300)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    service_radius_km: float = Field(default=15.0, ge=1.0, le=100.0)
     certifications: list[Certification] = Field(default_factory=list)
     portfolio: list[PortfolioItem] = Field(default_factory=list)
 
@@ -43,6 +46,9 @@ class UpdateProviderProfileRequest(BaseModel):
     experience_years: Optional[int] = Field(None, ge=0, le=50)
     services_offered: Optional[list[str]] = None
     location: Optional[str] = Field(None, max_length=300)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    service_radius_km: Optional[float] = Field(None, ge=1.0, le=100.0)
     certifications: Optional[list[Certification]] = None
     portfolio: Optional[list[PortfolioItem]] = None
     documents: Optional[ProviderDocuments] = None
