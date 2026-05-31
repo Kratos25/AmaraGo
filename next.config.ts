@@ -45,7 +45,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://lh3.googleusercontent.com https://firebasestorage.googleapis.com https://maps.gstatic.com",
-              "connect-src 'self' http://localhost:8000 https://*.googleapis.com https://*.firebase.com https://*.firebaseio.com https://api.razorpay.com wss://*.firebaseio.com https://api.bigdatacloud.net",
+              "connect-src 'self' http://localhost:8000 https://amarago-backend-d4iefytflq-el.a.run.app https://*.googleapis.com https://*.firebase.com https://*.firebaseio.com https://api.razorpay.com wss://*.firebaseio.com https://api.bigdatacloud.net",
               "frame-src https://checkout.razorpay.com https://accounts.google.com",
             ].join("; "),
           },
