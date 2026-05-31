@@ -58,6 +58,10 @@ export default function OffersTab() {
       toast({ title: 'Please fill all required fields', variant: 'destructive' });
       return;
     }
+    if (new Date(draft.validTo) < new Date(draft.validFrom)) {
+      toast({ title: 'Invalid date range', description: '"Valid To" must be on or after "Valid From"', variant: 'destructive' });
+      return;
+    }
     setSaving(true);
     try {
       await couponsAPI.create({

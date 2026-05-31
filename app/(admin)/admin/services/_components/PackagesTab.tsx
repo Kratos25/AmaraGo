@@ -34,18 +34,24 @@ export default function PackagesTab() {
   const resetDraft = () => {
     setDraft({ name: '', tagline: '', duration: '', originalPrice: '', price: '', badge: '', servicesRaw: '' });
     setPendingImage(null);
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(null);
   };
 
   const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: 'Image too large', description: 'Maximum file size is 5 MB.' });
+      return;
+    }
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
     setPendingImage(file);
     setImagePreview(URL.createObjectURL(file));
   };
 
   const handleSave = async () => {
-    if (!draft.name.trim()) return;
+    if (!draft.name.trim()) { toast({ title: 'Package name is required', variant: 'destructive' }); return; }
     const original_price = parseInt(draft.originalPrice) || 0;
     const price          = parseInt(draft.price) || 0;
     const services       = draft.servicesRaw.split(',').map((s) => s.trim()).filter(Boolean);
@@ -57,10 +63,13 @@ export default function PackagesTab() {
         });
         let imageUrl = data.image_url;
         if (pendingImage) {
-          setUploadingId(editId);
-          const { data: imgData } = await packagesAPI.uploadThumbnail(editId, pendingImage);
-          imageUrl = imgData.url;
-          setUploadingId(null);
+          try {
+            setUploadingId(editId);
+            const { data: imgData } = await packagesAPI.uploadThumbnail(editId, pendingImage);
+            imageUrl = imgData.url;
+          } finally {
+            setUploadingId(null);
+          }
         }
         setPackages((p) => p.map((x) => x.id === editId ? { ...data, image_url: imageUrl } : x));
         toast({ title: 'Package updated' });
@@ -72,17 +81,19 @@ export default function PackagesTab() {
         } as any);
         let imageUrl: string | undefined;
         if (pendingImage) {
-          setUploadingId(data.id);
-          const { data: imgData } = await packagesAPI.uploadThumbnail(data.id, pendingImage);
-          imageUrl = imgData.url;
-          setUploadingId(null);
+          try {
+            setUploadingId(data.id);
+            const { data: imgData } = await packagesAPI.uploadThumbnail(data.id, pendingImage);
+            imageUrl = imgData.url;
+          } finally {
+            setUploadingId(null);
+          }
         }
         setPackages((p) => [...p, { ...data, image_url: imageUrl }]);
         toast({ title: 'Package added ✓' });
         setAdding(false);
       }
     } catch {
-      setUploadingId(null);
       toast({ title: 'Failed to save package', variant: 'destructive' });
     }
     resetDraft();

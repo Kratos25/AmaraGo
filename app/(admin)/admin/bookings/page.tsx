@@ -277,13 +277,14 @@ function BookingCard({ booking, onCancel, onView, onAssign }: {
                     <button onClick={() => { onView(booking.id); setMenuOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#1A1A1A] hover:bg-[#F5F4F2]">
                       <Eye className="w-3.5 h-3.5 text-[#9CA3AF]" /> View Details
                     </button>
-                    <button onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#1A1A1A] hover:bg-[#F5F4F2]">
-                      <Phone className="w-3.5 h-3.5 text-[#9CA3AF]" /> Call Client
-                    </button>
-                    {booking.providerId && (
-                      <button onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#1A1A1A] hover:bg-[#F5F4F2]">
-                        <Phone className="w-3.5 h-3.5 text-[#9CA3AF]" /> Call Provider
-                      </button>
+                    {booking.clientPhone ? (
+                      <a href={`tel:${booking.clientPhone}`} onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#1A1A1A] hover:bg-[#F5F4F2]">
+                        <Phone className="w-3.5 h-3.5 text-[#9CA3AF]" /> Call Client
+                      </a>
+                    ) : (
+                      <span className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#9CA3AF] cursor-not-allowed">
+                        <Phone className="w-3.5 h-3.5" /> No client phone
+                      </span>
                     )}
                     {booking.status !== 'completed' && booking.status !== 'cancelled' && (
                       <button onClick={() => { onAssign(booking); setMenuOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-[#C84B31] hover:bg-[#FFF0EC]">
@@ -511,6 +512,7 @@ export default function AdminBookings() {
   const { toast } = useToast();
 
   const [bookings, setBookings]       = useState<Booking[]>([]);
+  const [loading,  setLoading]        = useState(true);
   const [activeTab, setActiveTab]     = useState<TabKey>('all');
   const [search, setSearch]           = useState('');
   const [sortBy, setSortBy]           = useState<'recent' | 'amount_high' | 'amount_low' | 'date'>('recent');
@@ -520,7 +522,10 @@ export default function AdminBookings() {
   const [assignModal, setAssignModal] = useState<Booking | null>(null);
 
   useEffect(() => {
-    bookingsAPI.list({ limit: 100 }).then(({ data }) => setBookings(data.items.map(mapBooking))).catch(() => {});
+    bookingsAPI.list({ limit: 100 })
+      .then(({ data }) => setBookings(data.items.map(mapBooking)))
+      .catch(() => toast({ title: 'Failed to load bookings', variant: 'destructive' }))
+      .finally(() => setLoading(false));
   }, []);
 
   // Counts
@@ -566,13 +571,21 @@ export default function AdminBookings() {
   const completionRate  = bookings.length ? Math.round((counts.completed / bookings.length) * 100) : 0;
 
   // Actions
-  const handleCancel = (id: string) => {
+  const handleCancel = async (id: string) => {
     const b = bookings.find((x) => x.id === id);
+    // Optimistic update
     setBookings((prev) => prev.map((x) => x.id === id
       ? { ...x, status: 'cancelled', cancelReason: 'Cancelled by admin' }
       : x
     ));
-    toast({ title: `Booking ${b?.bookingRef} cancelled`, description: 'Client and provider have been notified.' });
+    try {
+      await bookingsAPI.cancel(id);
+      toast({ title: `Booking ${b?.bookingRef} cancelled`, description: 'Client and provider have been notified.' });
+    } catch {
+      // Revert on failure
+      setBookings((prev) => prev.map((x) => x.id === id ? { ...x, status: b?.status ?? 'confirmed', cancelReason: undefined } : x));
+      toast({ title: 'Failed to cancel booking', variant: 'destructive' });
+    }
   };
 
   const handleAssigned = (bookingId: string, provider: ProviderProfile) => {
@@ -580,6 +593,7 @@ export default function AdminBookings() {
       ? { ...x, provider: provider.name, providerEmoji: '✨', providerId: provider.uid, status: 'confirmed' }
       : x
     ));
+    setAssignModal(null);
   };
 
   const handleView = (id: string) => router.push(`/admin/bookings/${id}`);
@@ -756,7 +770,18 @@ export default function AdminBookings() {
       )}
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-white border border-[#EBEBEB] rounded-2xl p-5 animate-pulse space-y-3">
+              <div className="flex justify-between"><div className="h-3 w-20 bg-[#F5F4F2] rounded" /><div className="h-5 w-16 bg-[#F5F4F2] rounded-full" /></div>
+              <div className="h-8 bg-[#F5F4F2] rounded-xl" />
+              <div className="grid grid-cols-3 gap-2">{[1,2,3].map((j)=><div key={j} className="h-12 bg-[#F5F4F2] rounded-xl" />)}</div>
+              <div className="h-9 bg-[#F5F4F2] rounded-xl" />
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={activeTab === 'cancelled' ? '🚫' : activeTab === 'searching' ? '🔍' : '📅'}
           label={search ? 'No bookings found' : `No ${activeTab === 'all' ? '' : activeTab.replace('_', ' ')} bookings`}

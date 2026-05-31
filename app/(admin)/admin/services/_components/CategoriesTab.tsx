@@ -26,7 +26,8 @@ export default function CategoriesTab() {
   const resetDraft = () => setDraft({ name: '', icon: '', description: '' });
 
   const handleSave = async () => {
-    if (!draft.name.trim()) return;
+    if (!draft.name.trim()) { toast({ title: 'Category name is required', variant: 'destructive' }); return; }
+    if (!draft.icon.trim()) { toast({ title: 'Please add an icon emoji', variant: 'destructive' }); return; }
     try {
       if (editId) {
         const res = await categoriesAPI.update(editId, draft);

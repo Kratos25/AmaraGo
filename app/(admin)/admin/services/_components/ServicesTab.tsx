@@ -74,12 +74,18 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
   const resetDraft = () => {
     setDraft({ name: '', categoryId: '', duration: '', basePrice: '', discountedPrice: '', description: '' });
     setPendingImage(null);
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(null);
   };
 
   const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: 'Image too large', description: 'Maximum file size is 5 MB.' });
+      return;
+    }
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
     setPendingImage(file);
     setImagePreview(URL.createObjectURL(file));
   };
@@ -98,7 +104,8 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
   const getCatIcon = (id: string) => allCategories.find((c) => c.id === id)?.icon ?? '';
 
   const handleSave = async () => {
-    if (!draft.name.trim() || !draft.categoryId) return;
+    if (!draft.name.trim()) { toast({ title: 'Service name is required', variant: 'destructive' }); return; }
+    if (!draft.categoryId)   { toast({ title: 'Please select a category', variant: 'destructive' }); return; }
     const base = parseInt(draft.basePrice) || 0;
     const disc = parseInt(draft.discountedPrice) || undefined;
     try {
@@ -109,10 +116,13 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
         });
         let imageUrl = data.image_url;
         if (pendingImage) {
-          setUploadingId(editId);
-          const { data: imgData } = await servicesAPI.uploadThumbnail(editId, pendingImage);
-          imageUrl = imgData.url;
-          setUploadingId(null);
+          try {
+            setUploadingId(editId);
+            const { data: imgData } = await servicesAPI.uploadThumbnail(editId, pendingImage);
+            imageUrl = imgData.url;
+          } finally {
+            setUploadingId(null);
+          }
         }
         setServices((p) => p.map((s) => s.id === editId
           ? { ...s, name: data.name, categoryId: data.category_id, duration: data.duration,
@@ -128,10 +138,13 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
         } as any);
         let imageUrl: string | undefined;
         if (pendingImage) {
-          setUploadingId(data.id);
-          const { data: imgData } = await servicesAPI.uploadThumbnail(data.id, pendingImage);
-          imageUrl = imgData.url;
-          setUploadingId(null);
+          try {
+            setUploadingId(data.id);
+            const { data: imgData } = await servicesAPI.uploadThumbnail(data.id, pendingImage);
+            imageUrl = imgData.url;
+          } finally {
+            setUploadingId(null);
+          }
         }
         setServices((p) => [...p, {
           id: data.id, name: data.name, categoryId: data.category_id,
@@ -143,7 +156,6 @@ export default function ServicesTab({ autoOpenAdd = false }: { autoOpenAdd?: boo
         setAdding(false);
       }
     } catch {
-      setUploadingId(null);
       toast({ title: 'Failed to save service', variant: 'destructive' });
     }
     resetDraft();
