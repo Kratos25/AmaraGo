@@ -63,17 +63,17 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
   if (!service) return null;
 
   return (
-    <div className="min-h-screen bg-[#f5f0ee] pb-28 md:pb-8 pt-12 px-28">
+    <div className="min-h-screen bg-[#f5f0ee] pb-32 md:pb-8 pt-4 md:pt-12 px-4 md:px-28">
 
       {/* ── Full-width hero banner with image overlay ── */}
-      <div className="relative w-full h-20 md:h-36 overflow-hidden rounded-[10px]">
+      <div className="relative w-full h-36 md:h-36 overflow-hidden rounded-[10px]">
         <img
           src={serviceImage}
           alt={service.name}
-          className="w-full h-36 object-cover"
+          className="w-full h-full object-cover"
         />
         {/* dark gradient overlay for text legibility */}
-        <div className="absolute inset-0 h-36 bg-gradient-to-b from-black/70 via-black/30 to-black/70" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/30 to-black/70" />
 
         {/* Nav row */}
         <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-4 pt-4 max-w-4xl mx-auto">
@@ -105,7 +105,7 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
       </div>
 
       {/* ── Main content: two-column on md+, stacked on mobile ── */}
-      <div className="max-w-5xl mx-auto px-4 mt-6 flex flex-col md:flex-row gap-x-20">
+      <div className="max-w-5xl mx-auto mt-4 md:mt-6 flex flex-col md:flex-row gap-6 md:gap-x-20">
 
         {/* ── LEFT: Info card ── */}
         <div className="flex-1 min-w-0">
@@ -148,24 +148,24 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
             </div>
 
             {/* Price row */}
-            <div className="flex items-center gap-3 pt-1">
-              <span className="text-2xl font-medium text-[#111827]">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 pt-1">
+              <span className="text-xl md:text-2xl font-medium text-[#111827]">
                 ₹{discountedPrice.toLocaleString('en-IN')}
               </span>
               {discount > 0 && (
                 <>
-                  <span className="text-lg text-gray-400 line-through">
+                  <span className="text-base md:text-lg text-gray-400 line-through">
                     ₹{service.base_price.toLocaleString('en-IN')}
                   </span>
-                  <span className="text-2xl font-normal text-[#16A34A]">
+                  <span className="text-base md:text-2xl font-normal text-[#16A34A]">
                     Save {discount}%
                   </span>
                 </>
               )}
             </div>
 
-            {/* CTA buttons */}
-            <div className="flex gap-3">
+            {/* CTA buttons — hidden on mobile (sticky bar below handles it) */}
+            <div className="hidden md:flex gap-3">
               <button
                 onClick={handleAddToCart}
                 className={`flex items-center justify-center gap-2 h-12 px-5 rounded-xl border-2 font-bold text-sm transition-all flex-shrink-0 ${
@@ -187,7 +187,7 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
             </div>
 
             {/* Social proof row */}
-            <div className="flex items-center gap-3 pt-1 border-t border-gray-50">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 pt-1 border-t border-gray-50">
               {service.rating > 0 && (
                 <div className="flex items-center gap-1">
                   <Star size={13} className="fill-amber-400 text-amber-400" />
@@ -207,13 +207,13 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
                   </div>
                 ))}
               </div>
-              <span className="text-md text-[#7F5660]">10,000+ bookings in Mumbai</span>
+              <span className="text-xs md:text-sm text-[#7F5660]">10,000+ bookings in Mumbai</span>
             </div>
           </div>
         </div>
 
         {/* ── RIGHT: Service image panel ── */}
-        <div className="md:w-80 lg:w-96 flex-shrink-0">
+        <div className="hidden md:block md:w-80 lg:w-96 flex-shrink-0">
           <div className="relative flex rounded-2xl overflow-hidden items-center justify-center h-64 md:h-full min-h-64">
             <img
               src={serviceImage}
@@ -228,7 +228,7 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
       </div>
 
       {/* ── Mobile sticky bottom CTA ── */}
-      <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 px-4 py-4 mb-16 md:hidden">
+      <div className="fixed bottom-16 inset-x-0 z-40 bg-white border-t border-gray-100 px-4 py-3 md:hidden">
         <div className="max-w-2xl mx-auto flex gap-3">
           <button
             onClick={handleAddToCart}

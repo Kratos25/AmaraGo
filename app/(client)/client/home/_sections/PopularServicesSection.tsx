@@ -15,7 +15,7 @@ function ServiceCarouselCard({
   onNavigate: (id: string) => void;
 }) {
   return (
-    <div className="flex-shrink-0 w-52 md:w-60 rounded-[10px] hover:shadow-lg transition-shadow overflow-hidden">
+    <div className="flex-shrink-0 w-52 md:w-60 rounded-[10px] hover:shadow-lg transition-shadow overflow-hidden cursor-pointer">
       <div
         className="h-36 bg-gradient-to-br from-pink-100 to-pink-50 flex items-center justify-center relative overflow-hidden"
         onClick={() => onNavigate(service.id)}
@@ -146,7 +146,7 @@ export function PopularServicesSection({ services, loading }: Props) {
                 </div>
               ))
             : services.map((service) => (
-                <ServiceCarouselCard key={service.id} service={service} onNavigate={router.push.bind(router)} />
+                <ServiceCarouselCard key={service.id} service={service} onNavigate={(id) => router.push(`/client/services/${id}`)} />
               ))}
           </div>
         </div>

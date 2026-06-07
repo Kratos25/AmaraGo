@@ -37,9 +37,9 @@ export function HeroSection({
   }, [setHeroSearchVisible]);
 
   return (
-    <section className="bg-[#FFEAEF]">
-      <div className="w-full mx-auto px-4 md:pl-28 md:pr-0 pt-8 pb-0 md:py-0 flex flex-col md:flex-row items-center gap-6 md:gap-16">
-        <div className="flex-1 min-w-0">
+    <section className="bg-[#FFEAEF] overflow-x-clip">
+      <div className="w-full mx-auto px-3 sm:px-4 md:pl-28 md:pr-0 pt-8 pb-0 md:py-0 flex flex-col md:flex-row items-center gap-6 md:gap-16">
+        <div className="flex-1 min-w-0 w-full">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-[#111827] leading-tight mb-3">
             Self-care starts at your{' '}
             <span className="text-[#E8708E]">doorstep<span className="text-black">.</span></span>

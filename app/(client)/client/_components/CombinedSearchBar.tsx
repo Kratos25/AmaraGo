@@ -42,17 +42,56 @@ export function CombinedSearchBar({ services, onNavigate, userLocation, onLocati
   const showDropdown = focused && query.trim().length > 0;
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative w-full max-w-full overflow-hidden">
       <form
         onSubmit={handleSubmit}
-        className="p-3 md:p-6 bg-white/50 backdrop-blur-xl rounded-[10px] border border-[#E8708E]/50"
+        className="p-2.5 sm:p-3 md:p-6 bg-white/50 backdrop-blur-xl rounded-[10px] border border-[#E8708E]/50"
       >
-      <div className="flex items-stretch bg-white rounded-md drop-shadow-xl border border-[#E8708E]/30 overflow-hidden h-14 md:h-16 p-2">
+        {/* ── Mobile: location row on top, search row below ──── */}
+        <div className="flex flex-col gap-2 md:hidden">
+          {/* Location row */}
+          <button
+            type="button"
+            onClick={onLocationClick}
+            className="flex items-center gap-2 bg-white rounded-lg border border-[#E8708E]/20 px-3 py-2 w-full active:bg-pink-50 transition-colors"
+          >
+            <MapPin size={15} className="text-[#E8708E] flex-shrink-0" />
+            <div className="flex-1 min-w-0 text-left">
+              <p className="text-[10px] text-gray-400 leading-none mb-0.5">your location</p>
+              <p className="text-xs font-medium text-gray-700 truncate">{userLocation}</p>
+            </div>
+            <ChevronDown size={13} className="text-gray-400 flex-shrink-0" />
+          </button>
+
+          {/* Search row */}
+          <div className="flex items-stretch bg-white rounded-lg drop-shadow-md border border-[#E8708E]/30 overflow-hidden h-11">
+            <div className="relative flex-1 min-w-0 flex items-center">
+              <Search className="absolute left-2.5 text-[#E8708E] pointer-events-none" size={15} />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => setFocused(true)}
+                placeholder='Try "Hair Spa" or "Bridal"'
+                className="w-full h-full pl-8 pr-2 text-[13px] text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
+              />
+            </div>
+            <button
+              type="submit"
+              className="bg-[#E8708E] hover:bg-[#c7166f] text-white px-4 flex items-center transition-colors flex-shrink-0"
+            >
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Desktop: original single-row layout ─────────────── */}
+        <div className="hidden md:flex items-stretch bg-white rounded-md drop-shadow-xl border border-[#E8708E]/30 overflow-hidden h-16 p-2">
           <div className="flex items-center gap-1 pl-2">
             <MapPin size={20} className="text-[#E8708E]" />
           </div>
-          {/* Location pill — desktop only */}
-          <div className="hidden md:flex flex-col justify-center border-r border-gray-200 px-3 flex-shrink-0">
+          {/* Location pill */}
+          <div className="flex flex-col justify-center border-r border-gray-200 px-3 flex-shrink-0">
             <span className="text-[12px] text-gray-400 mb-0.5 leading-none">location</span>
             <button
               type="button"
@@ -80,9 +119,9 @@ export function CombinedSearchBar({ services, onNavigate, userLocation, onLocati
           {/* Search button */}
           <button
             type="submit"
-            className="bg-[#E8708E] hover:bg-[#c7166f] text-white text-sm font-semibold px-4 md:px-8 rounded-md flex items-center gap-1.5 transition-colors flex-shrink-0"
+            className="bg-[#E8708E] hover:bg-[#c7166f] text-white text-sm font-semibold px-8 rounded-md flex items-center gap-1.5 transition-colors flex-shrink-0"
           >
-            <span className="hidden md:inline">Search</span> <ArrowRight size={15} />
+            Search <ArrowRight size={15} />
           </button>
         </div>
       </form>

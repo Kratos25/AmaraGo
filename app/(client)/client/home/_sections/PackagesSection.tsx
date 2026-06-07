@@ -18,6 +18,7 @@ interface PackageItem {
 }
 
 function PackageCard({ pkg }: { pkg: PackageItem }) {
+  const router = useRouter();
   const { name, id, time, price, imageUrl, badge, originalPrice } = pkg;
   const numPrice = parseFloat(price.replace(/[^0-9.]/g, ''));
   const savings =
@@ -26,7 +27,10 @@ function PackageCard({ pkg }: { pkg: PackageItem }) {
       : null;
 
   return (
-    <div className="flex-shrink-0 w-52 md:w-60 rounded-[10px] border border-gray-100 hover:shadow-lg transition-shadow overflow-hidden">
+    <div
+      className="flex-shrink-0 w-52 md:w-60 rounded-[10px] border border-gray-100 hover:shadow-lg transition-shadow overflow-hidden cursor-pointer"
+      onClick={() => router.push(`/client/services/${id}`)}
+    >
       <div className="h-36 bg-gradient-to-br from-pink-100 to-pink-50 flex items-center justify-center relative overflow-hidden">
         <img
           src={
