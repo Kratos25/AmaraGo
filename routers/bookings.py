@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from google.api_core.exceptions import FailedPrecondition
 from google.cloud import firestore as gc_firestore
 from pydantic import BaseModel
 
@@ -468,7 +469,7 @@ async def create_multi_booking(
     )
 
     # Notify eligible providers in the same city
-    booking_city = _extract_city(body.address)
+    booking_city = _extract_city(address)
     _notify_eligible_providers(
         db, ref.id, booking_city, names,
         user_data.get("name", "A client"),
@@ -604,7 +605,21 @@ async def list_bookings(
         if cursor_doc.exists:
             q = q.start_after(cursor_doc)
 
-    docs = list(q.stream())
+    try:
+        docs = list(q.stream())
+    except FailedPrecondition:
+        # Index not yet ready — fall back to unordered query
+        if current_user.role == "admin":
+            fallback = col.where("status", "==", status) if status else col
+        elif current_user.role == "service_provider":
+            fallback = col.where("provider_id", "==", current_user.uid)
+        else:
+            fallback = col.where("client_id", "==", current_user.uid)
+        try:
+            docs = list(fallback.limit(limit + 1).stream())
+        except FailedPrecondition:
+            docs = []
+
     has_next = len(docs) > limit
     page_docs = docs[:limit]
     items = [_doc_to_booking(d) for d in page_docs]
