@@ -7,7 +7,7 @@ import { useAuth } from '@/config/context/AuthContext';
 import {
   User, Edit3, Camera, Star, Award, ChevronRight,
   Bell, Shield, HelpCircle, LogOut, MapPin, Plus, Trash2,
-  Gift, Sparkles, Check, X, Heart, FileText, ShieldCheck,
+  Gift, Sparkles, Check, X, Heart, FileText, ShieldCheck, Phone,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -15,6 +15,7 @@ import { usersAPI, loyaltyAPI } from '@/lib/api';
 import { addressesAPI } from '@/lib/api';
 import { useWishlist } from '@/config/context/WishlistContext';
 import { ProviderRegistrationModal } from '@/app/(client)/client/_components/ProviderRegistrationModal';
+import { LogoutOverlay } from '@/components/ui/LogoutOverlay';
 
 type MenuItemType = {
   icon: React.ReactNode;
@@ -57,6 +58,7 @@ export default function Profile() {
   const [addingAddr, setAddingAddr] = useState(false);
   const [newAddrLabel, setNewAddrLabel] = useState('');
   const [newAddrText, setNewAddrText]   = useState('');
+  const [loggingOut, setLoggingOut]     = useState(false);
 
   const fetchAddresses = async () => {
     setAddrsLoading(true);
@@ -150,11 +152,13 @@ export default function Profile() {
 
   const handleSignOut = async () => {
     try {
+      setLoggingOut(true);
       await signOut(auth);
       await fetch('/api/auth/logout', { method: 'POST' });
-      router.replace('/login');
+      setTimeout(() => { window.location.href = '/login'; }, 1500);
     } catch (e) {
       console.error(e);
+      setLoggingOut(false);
     }
   };
 
@@ -193,6 +197,7 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
+      {loggingOut && <LogoutOverlay />}
 
       {/* ── Address Manager Drawer ── */}
       {showAddresses && (
@@ -307,7 +312,16 @@ export default function Profile() {
               <Edit3 size={13} className="text-white" />
             </button>
           </div>
-          <p className="text-white/50 text-sm mb-3">{email}</p>
+          <p className="text-white/50 text-sm">{email}</p>
+          {phone && <p className="text-white/50 text-sm mb-1">{phone}</p>}
+          {!phone && (
+            <button
+              onClick={() => { setEditName(name); setEditPhone(''); setIsEditing(true); }}
+              className="text-[#e5849c] text-xs font-semibold mb-1 hover:underline"
+            >
+              + Add phone number
+            </button>
+          )}
           <div className="flex items-center gap-2 bg-white/10 px-4 py-1.5 rounded-full">
             <Sparkles size={13} className="text-[#e5849c]" />
             <span className="text-white text-xs font-medium">Amara Gold Member</span>
@@ -331,6 +345,25 @@ export default function Profile() {
             </div>
           ))}
         </div>
+
+        {/* Phone number prompt for Google sign-in users */}
+        {!phone && (
+          <div className="bg-[#fff5f7] border border-[#e5849c]/30 rounded-2xl px-4 py-3.5 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#e5849c]/15 flex items-center justify-center flex-shrink-0">
+              <Phone size={16} className="text-[#e5849c]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#111827]">Add your phone number</p>
+              <p className="text-xs text-gray-500">Required for booking confirmations</p>
+            </div>
+            <button
+              onClick={() => { setEditName(name); setEditPhone(''); setIsEditing(true); }}
+              className="text-xs font-bold text-[#e5849c] bg-white border border-[#e5849c]/30 px-3 py-1.5 rounded-full hover:bg-[#fdf0f3] transition-colors flex-shrink-0"
+            >
+              Add
+            </button>
+          </div>
+        )}
 
         {/* Loyalty */}
         <div className="bg-[#111827] rounded-2xl p-5 relative overflow-hidden">
@@ -433,19 +466,33 @@ export default function Profile() {
 
         {/* ── Become a Provider banner ─────────────────────────────── */}
         {!isProvider && (
-          <button
-            onClick={() => setShowProviderModal(true)}
-            className="w-full flex items-center gap-4 bg-gradient-to-r from-[#111827] to-[#1f2937] rounded-2xl px-5 py-4 text-left hover:brightness-110 transition-all"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-[#e5849c]/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-2xl">💼</span>
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#e5849c] to-[#d45070] p-5">
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-20 h-20 rounded-full bg-white/10 translate-y-1/2 -translate-x-1/4 pointer-events-none" />
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-2xl">💼</span>
+                <h3 className="text-white font-extrabold text-base">Join AmaraGo as a Provider</h3>
+              </div>
+              <p className="text-white/80 text-xs leading-relaxed mb-4">
+                Earn money by offering your beauty & wellness skills. Set your own schedule, grow your client base, and get paid weekly.
+              </p>
+              <div className="flex items-center gap-3 mb-4">
+                {['Flexible hours', 'Weekly payouts', 'Free training'].map((perk) => (
+                  <span key={perk} className="text-[10px] font-bold text-white bg-white/20 px-2.5 py-1 rounded-full">
+                    {perk}
+                  </span>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowProviderModal(true)}
+                className="w-full flex items-center justify-center gap-2 bg-white text-[#e5849c] font-bold text-sm py-3 rounded-xl hover:bg-white/90 transition-colors shadow-sm"
+              >
+                Apply Now
+                <ChevronRight size={16} />
+              </button>
             </div>
-            <div className="flex-1">
-              <p className="text-white font-bold text-sm">Become a Service Provider</p>
-              <p className="text-white/50 text-xs mt-0.5">Earn money offering your skills on AmaraGo</p>
-            </div>
-            <ChevronRight size={18} className="text-[#e5849c] flex-shrink-0" />
-          </button>
+          </div>
         )}
         {isProvider && (
           <button

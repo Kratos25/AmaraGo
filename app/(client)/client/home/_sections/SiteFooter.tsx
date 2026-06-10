@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ChevronRight } from 'lucide-react';
 
 export function SiteFooter() {
   const router = useRouter();
@@ -10,6 +10,27 @@ export function SiteFooter() {
 
   return (
     <footer className="bg-[#111827] text-white">
+      {/* Become a Provider banner */}
+      <div className="border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-[#e5849c]/15 to-transparent rounded-2xl px-5 py-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💼</span>
+              <div>
+                <p className="text-white font-bold text-sm">Want to earn with AmaraGo?</p>
+                <p className="text-gray-400 text-xs mt-0.5">Join as a service provider — flexible hours, weekly payouts</p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push('/client/profile')}
+              className="flex items-center gap-1.5 bg-[#e5849c] hover:bg-[#d9708a] text-white text-xs font-bold px-5 py-2.5 rounded-full transition-colors flex-shrink-0"
+            >
+              Apply Now <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-12">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           {/* Brand */}

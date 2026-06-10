@@ -10,6 +10,7 @@ import { auth } from "@/lib/firebase";
 import { useCart } from "@/config/context/CartContext";
 import { useSearchVisibility } from '@/config/context/SearchVisibilityContext';
 import { Service } from '@/app/(client)/client/home/_types';
+import { LogoutOverlay } from '@/components/ui/LogoutOverlay';
 
 const navLinks = [
   { href: "/client/home",      label: "Home",      icon: Home     },
@@ -23,6 +24,7 @@ function ProfileDropdown() {
   const router = useRouter();
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [open, setOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,13 +41,16 @@ function ProfileDropdown() {
   }, []);
 
   const handleSignOut = async () => {
+    setLoggingOut(true);
+    setOpen(false);
     await signOut(auth);
     await fetch("/api/logout", { method: "POST" });
-    setOpen(false);
-    router.push("/client/home");
+    setTimeout(() => { window.location.href = "/client/home"; }, 1500);
   };
 
   return (
+    <>
+    {loggingOut && <LogoutOverlay />}
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
@@ -94,6 +99,7 @@ function ProfileDropdown() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

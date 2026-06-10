@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { categoriesAPI, servicesAPI } from '@/lib/api';
 import { SiteFooter } from '../home/_sections/SiteFooter';
@@ -80,14 +80,73 @@ export default function ServicesClient() {
   const hasActiveFilters = appliedFilters.minRating > 0 || appliedFilters.minPrice > 0
     || appliedFilters.maxPrice < 50000 || appliedFilters.minDuration > 0 || appliedFilters.maxDuration < 300;
 
+  const heroRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [showStickyCategories, setShowStickyCategories] = useState(false);
+  const activePillRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyCategories(!entry.isIntersecting),
+      { threshold: 0, rootMargin: '-80px 0px 0px 0px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (showStickyCategories && activePillRef.current) {
+      activePillRef.current.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    }
+  }, [showStickyCategories, activeCategory]);
+
+  const selectCategoryAndScroll = (name: string) => {
+    selectCategory(name);
+    setTimeout(() => {
+      gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
+
   return (
     <div className="min-h-screen bg-white">
-      <ServicesHero
-        loading={loading}
-        categoryList={categoryList}
-        activeCategory={activeCategory}
-        onSelectCategory={selectCategory}
-      />
+      <div ref={heroRef}>
+        <ServicesHero
+          loading={loading}
+          categoryList={categoryList}
+          activeCategory={activeCategory}
+          onSelectCategory={selectCategoryAndScroll}
+        />
+      </div>
+
+      {/* Fixed mobile category bar — appears when hero scrolls out */}
+      {showStickyCategories && (
+        <div className="md:hidden fixed top-[100px] left-0 right-0 z-40 bg-white border-b border-[#e5849c]/20 shadow-md px-3 py-2.5 animate-fade-in">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            {categoryList.map((cat) => {
+              const active = activeCategory === cat.name;
+              return (
+                <button
+                  key={cat.name}
+                  ref={active ? activePillRef : undefined}
+                  onClick={() => selectCategoryAndScroll(cat.name)}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold transition-all ${
+                    active
+                      ? 'bg-[#e5849c] text-white shadow-sm shadow-[#e5849c]/30'
+                      : 'bg-[#f5f0ee] text-gray-700 active:bg-gray-200'
+                  }`}
+                >
+                  <span className="text-sm">{cat.icon}</span>
+                  {cat.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div ref={gridRef} className="scroll-mt-40">
       <ServicesGrid
         loading={loading}
         activeCategory={activeCategory}
@@ -103,6 +162,7 @@ export default function ServicesClient() {
           setAppliedFilters(f); setFilters(f);
         }}
       />
+      </div>
       {showFilterPanel && (
         <ServicesFilterPanel
           filters={filters}

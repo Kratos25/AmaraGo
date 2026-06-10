@@ -63,10 +63,10 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
   if (!service) return null;
 
   return (
-    <div className="min-h-screen bg-[#f5f0ee] pb-32 md:pb-8 pt-4 md:pt-12 px-4 md:px-28">
+    <div className="min-h-screen bg-[#f5f0ee] pb-8 pt-4 md:pt-12 px-4 md:px-28">
 
       {/* ── Full-width hero banner with image overlay ── */}
-      <div className="relative w-full h-36 md:h-36 overflow-hidden rounded-[10px]">
+      <div className="relative w-full h-52 md:h-36 overflow-hidden rounded-[10px]">
         <img
           src={serviceImage}
           alt={service.name}
@@ -97,19 +97,28 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
         </div>
 
         {/* Title centered in banner */}
-        <div className="absolute inset-0 flex items-center justify-center px-16">
-          <h1 className="text-xl md:text-3xl font-medium text-white text-center drop-shadow-lg leading-tight">
+        <div className="absolute inset-0 flex items-center justify-center px-6 md:px-16">
+          <h1 className="text-lg sm:text-xl md:text-3xl font-medium text-white text-center drop-shadow-lg leading-tight">
             {service.name}
           </h1>
         </div>
       </div>
 
+      {/* ── Mobile service image ── */}
+      <div className="md:hidden mt-4 rounded-2xl overflow-hidden h-48 sm:h-56">
+        <img
+          src={serviceImage}
+          alt={service.name}
+          className="w-full h-full object-cover"
+        />
+      </div>
+
       {/* ── Main content: two-column on md+, stacked on mobile ── */}
-      <div className="max-w-5xl mx-auto mt-4 md:mt-6 flex flex-col md:flex-row gap-6 md:gap-x-20">
+      <div className="max-w-5xl mx-auto mt-4 md:mt-6 flex flex-col md:flex-row gap-4 sm:gap-6 md:gap-x-20">
 
         {/* ── LEFT: Info card ── */}
         <div className="flex-1 min-w-0">
-          <div className="bg-[#FFF8FA] rounded-[10px] shadow-sm border border-[#E8708E]/30 p-6 flex flex-col gap-4">
+          <div className="bg-[#FFF8FA] rounded-[10px] shadow-sm border border-[#E8708E]/30 p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
 
             {/* Category badge */}
             {categoryDisplay && (
@@ -121,7 +130,7 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
 
             {/* Name + description */}
             <div>
-              <h2 className="text-2xl font-medium text-[#111827] mb-2">{service.name}</h2>
+              <h2 className="text-xl sm:text-2xl font-medium text-[#111827] mb-1 sm:mb-2">{service.name}</h2>
               {service.description && (
                 <p className="text-[#805660] text-sm leading-relaxed">{service.description}</p>
               )}
@@ -129,7 +138,7 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
 
             {/* What's included */}
             <div>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">What's included</p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 sm:mb-3">What's included</p>
               <div className="space-y-2.5">
                 {[
                   { text: 'Trained & verified professional' },
@@ -164,8 +173,8 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
               )}
             </div>
 
-            {/* CTA buttons — hidden on mobile (sticky bar below handles it) */}
-            <div className="hidden md:flex gap-3">
+            {/* CTA buttons */}
+            <div className="flex gap-3">
               <button
                 onClick={handleAddToCart}
                 className={`flex items-center justify-center gap-2 h-12 px-5 rounded-xl border-2 font-bold text-sm transition-all flex-shrink-0 ${
@@ -227,29 +236,6 @@ export default function ServiceDetail({ params }: { params: Promise<{ id: string
 
       </div>
 
-      {/* ── Mobile sticky bottom CTA ── */}
-      <div className="fixed bottom-16 inset-x-0 z-40 bg-white border-t border-gray-100 px-4 py-3 md:hidden">
-        <div className="max-w-2xl mx-auto flex gap-3">
-          <button
-            onClick={handleAddToCart}
-            className={`flex items-center justify-center gap-2 h-14 px-6 rounded-xl border-2 font-bold text-sm transition-all flex-shrink-0 ${
-              added
-                ? 'border-green-400 bg-green-50 text-green-600'
-                : 'border-[#e5849c]/40 text-[#e5849c] hover:bg-[#fdf0f3]'
-            }`}
-          >
-            {added ? <Check size={18} /> : <ShoppingCart size={18} />}
-            {added ? 'Added!' : 'Add to Cart'}
-          </button>
-
-          <button
-            onClick={() => router.push(`/client/bookings/new?serviceId=${service.id}`)}
-            className="flex-1 h-14 rounded-xl bg-[#e5849c] hover:bg-[#d9708a] text-white font-bold text-base flex items-center justify-center gap-2 transition-colors"
-          >
-            Book Now · ₹{discountedPrice.toLocaleString('en-IN')}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

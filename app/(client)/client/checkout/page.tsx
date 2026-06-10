@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCart } from "@/config/context/CartContext";
 import { useLocation } from "@/config/context/LocationContext";
-import { bookingsAPI, addressesAPI, couponsAPI, paymentsAPI, getPublicConfig } from "@/lib/api";
+import { bookingsAPI, addressesAPI, couponsAPI, paymentsAPI, getPublicConfig, usersAPI } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -28,10 +28,10 @@ const TIME_SLOTS = [
 ];
 
 const PAYMENT_OPTIONS = [
-  { id: "upi",    label: "UPI / GPay",     icon: "📱", subtitle: "Instant transfer"  },
-  { id: "card",   label: "Card",           icon: "💳", subtitle: "Credit / Debit"    },
-  { id: "wallet", label: "Wallet",         icon: "👛", subtitle: "Prepaid balance"    },
-  { id: "cash",   label: "Pay on Service", icon: "💵", subtitle: "Cash on delivery"  },
+  { id: "cash",   label: "Pay on Service", icon: "💵", subtitle: "Cash on delivery",  disabled: false },
+  { id: "upi",    label: "UPI / GPay",     icon: "📱", subtitle: "Instant transfer",  disabled: true  },
+  { id: "card",   label: "Card",           icon: "💳", subtitle: "Credit / Debit",    disabled: true  },
+  { id: "wallet", label: "Wallet",         icon: "👛", subtitle: "Prepaid balance",   disabled: true  },
 ];
 
 const STEPS = ["Slot", "Address", "Payment", "Review"];
@@ -99,14 +99,17 @@ function CheckoutPage() {
   // Step 2 — address
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
-  const [newAddressText, setNewAddressText] = useState("");
   const [newAddressLabel, setNewAddressLabel] = useState("");
+  const [newAddrFlat, setNewAddrFlat] = useState("");
+  const [newAddrArea, setNewAddrArea] = useState("");
+  const [newAddrCity, setNewAddrCity] = useState("");
+  const [newAddrPincode, setNewAddrPincode] = useState("");
   const [saveNewAddress, setSaveNewAddress] = useState(true);
   const [phone, setPhone] = useState("");
   const [addrsLoading, setAddrsLoading] = useState(true);
 
   // Step 3 — payment
-  const [paymentMethod, setPaymentMethod] = useState("upi");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [couponCode, setCouponCode] = useState(searchParams.get("coupon") ?? "");
   const [discount, setDiscount] = useState(Number(searchParams.get("discount") ?? 0));
   const [appliedCoupon, setAppliedCoupon] = useState(searchParams.get("coupon") ?? "");
@@ -129,7 +132,7 @@ function CheckoutPage() {
     return () => { document.body.removeChild(script); };
   }, []);
 
-  // Load addresses
+  // Load addresses + pre-fill phone from profile
   useEffect(() => {
     if (!user) return;
     addressesAPI.list()
@@ -141,8 +144,11 @@ function CheckoutPage() {
       .catch(() => {})
       .finally(() => setAddrsLoading(false));
 
-    // pre-fill phone from auth
-    if (user.phoneNumber) setPhone(user.phoneNumber);
+    usersAPI.getMe()
+      .then(({ data }) => { if (data.phone) setPhone(data.phone); })
+      .catch(() => {});
+
+    if (!phone && user.phoneNumber) setPhone(user.phoneNumber);
   }, [user]);
 
   // Redirect if cart empty & not done
@@ -175,8 +181,9 @@ function CheckoutPage() {
   const handleConfirmBooking = async () => {
     if (!user) { router.push("/login?redirect=/client/checkout"); return; }
     if (!selectedDate || !selectedTime) { toast({ title: "Select a date and time", variant: "destructive" }); return; }
+    if (!phone.trim()) { toast({ title: "Phone number is required", variant: "destructive" }); return; }
 
-    const hasAddress = selectedAddressId || newAddressText.trim();
+    const hasAddress = selectedAddressId || newAddrFull.trim();
     if (!hasAddress) {
       toast({ title: "Add a delivery address", variant: "destructive" });
       return;
@@ -188,14 +195,14 @@ function CheckoutPage() {
 
       // If user typed a new address and opted to save it, persist it first
       let finalAddressId = selectedAddressId ?? undefined;
-      let finalAddressText: string | undefined = !selectedAddressId ? newAddressText : undefined;
+      let finalAddressText: string | undefined = !selectedAddressId ? newAddrFull : undefined;
 
-      if (!selectedAddressId && newAddressText.trim() && saveNewAddress) {
+      if (!selectedAddressId && newAddrFull.trim() && saveNewAddress) {
         try {
           const label = newAddressLabel.trim() || 'Address';
           const created = await addressesAPI.create({
             label,
-            address: newAddressText.trim(),
+            address: newAddrFull.trim(),
             is_default: savedAddresses.length === 0,
           });
           finalAddressId = created.data.id;
@@ -383,11 +390,13 @@ function CheckoutPage() {
     </div>
   );
 
+  const newAddrFull = [newAddrFlat, newAddrArea, newAddrCity, newAddrPincode].filter(Boolean).join(", ");
+
   const renderStep2 = () => (
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-1">
-          <span className="inline-flex items-center gap-1"><CreditCard size={14} className="text-[#e5849c]" /> Phone Number</span>
+          <span className="inline-flex items-center gap-1"><CreditCard size={14} className="text-[#e5849c]" /> Phone Number <span className="text-red-400">*</span></span>
         </label>
         <Input
           type="tel"
@@ -396,12 +405,15 @@ function CheckoutPage() {
           onChange={(e) => setPhone(e.target.value)}
           className="rounded-2xl"
         />
+        {!phone.trim() && (
+          <p className="text-[11px] text-red-400 mt-1">Phone number is required for booking</p>
+        )}
       </div>
 
       <div>
         <p className="text-sm font-semibold text-gray-700 mb-3">
           <MapPin size={14} className="inline mr-1.5 text-[#e5849c]" />
-          Delivery Address
+          Service Address
         </p>
         {addrsLoading ? (
           <div className="space-y-2">
@@ -412,7 +424,7 @@ function CheckoutPage() {
             {savedAddresses.map((addr) => (
               <button
                 key={addr.id}
-                onClick={() => { setSelectedAddressId(addr.id); setNewAddressText(""); }}
+                onClick={() => setSelectedAddressId(addr.id)}
                 className={`w-full flex items-start gap-3 p-4 rounded-2xl border text-left transition-all ${
                   selectedAddressId === addr.id
                     ? "border-[#e5849c] bg-[#fdf0f3]"
@@ -444,20 +456,40 @@ function CheckoutPage() {
                 {savedAddresses.length > 0 ? "Use a different address" : "Add address"}
               </button>
               {!selectedAddressId && (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <input
                     placeholder="Label (e.g. Home, Office, Hotel)"
                     value={newAddressLabel}
                     onChange={(e) => setNewAddressLabel(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 bg-white"
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 bg-white"
                   />
-                  <textarea
-                    placeholder="Full address…"
-                    value={newAddressText}
-                    onChange={(e) => setNewAddressText(e.target.value)}
-                    rows={2}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 resize-none bg-white"
+                  <input
+                    placeholder="Flat / House No. / Building *"
+                    value={newAddrFlat}
+                    onChange={(e) => setNewAddrFlat(e.target.value)}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 bg-white"
                   />
+                  <input
+                    placeholder="Area / Street / Locality *"
+                    value={newAddrArea}
+                    onChange={(e) => setNewAddrArea(e.target.value)}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 bg-white"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      placeholder="City *"
+                      value={newAddrCity}
+                      onChange={(e) => setNewAddrCity(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 bg-white"
+                    />
+                    <input
+                      placeholder="Pincode *"
+                      value={newAddrPincode}
+                      onChange={(e) => setNewAddrPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      inputMode="numeric"
+                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#e5849c]/40 bg-white"
+                    />
+                  </div>
                   {/* Save to profile toggle */}
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <div
@@ -486,18 +518,26 @@ function CheckoutPage() {
           {PAYMENT_OPTIONS.map((opt) => (
             <button
               key={opt.id}
-              onClick={() => setPaymentMethod(opt.id)}
-              className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${
-                paymentMethod === opt.id
-                  ? "border-[#e5849c] bg-[#fdf0f3]"
-                  : "border-gray-200 hover:border-gray-300"
+              onClick={() => !opt.disabled && setPaymentMethod(opt.id)}
+              disabled={opt.disabled}
+              className={`relative flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${
+                opt.disabled
+                  ? "border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed"
+                  : paymentMethod === opt.id
+                    ? "border-[#e5849c] bg-[#fdf0f3]"
+                    : "border-gray-200 hover:border-gray-300"
               }`}
             >
-              <span className="text-xl">{opt.icon}</span>
-              <div>
-                <p className="text-xs font-semibold text-gray-900">{opt.label}</p>
+              <span className={`text-xl ${opt.disabled ? "grayscale" : ""}`}>{opt.icon}</span>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs font-semibold ${opt.disabled ? "text-gray-400" : "text-gray-900"}`}>{opt.label}</p>
                 <p className="text-[10px] text-gray-400">{opt.subtitle}</p>
               </div>
+              {opt.disabled && (
+                <span className="absolute top-2 right-2 text-[8px] font-bold uppercase tracking-wide text-[#e5849c] bg-[#fdf0f3] px-1.5 py-0.5 rounded-full">
+                  Soon
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -578,7 +618,7 @@ function CheckoutPage() {
           <span className="text-xs leading-snug">
             {selectedAddressId
               ? savedAddresses.find((a) => a.id === selectedAddressId)?.address ?? "Saved address"
-              : newAddressText || "—"}
+              : newAddrFull || "—"}
           </span>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -622,15 +662,111 @@ function CheckoutPage() {
 
   const canProceed = () => {
     if (step === 1) return !!selectedDate && !!selectedTime;
-    if (step === 2) return !!(selectedAddressId || newAddressText.trim());
+    if (step === 2) return !!phone.trim() && !!(selectedAddressId || newAddrFull.trim());
     if (step === 3) return !!paymentMethod;
     return true;
   };
 
+  const orderSummaryPanel = (
+    <div className="space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Order Summary</p>
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.id} className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#fdf0f3] rounded-lg flex items-center justify-center text-lg flex-shrink-0">
+                  {item.image_url ? (
+                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover rounded-lg" />
+                  ) : '🌸'}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                  {item.duration && <p className="text-[11px] text-gray-400">qty {item.quantity}</p>}
+                </div>
+              </div>
+              <p className="text-sm font-semibold text-gray-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</p>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-gray-100 mt-4 pt-4 space-y-2 text-sm">
+          <div className="flex justify-between text-gray-500">
+            <span>Subtotal</span><span>₹{subtotal.toLocaleString("en-IN")}</span>
+          </div>
+          {discount > 0 && (
+            <div className="flex justify-between text-green-600">
+              <span>Discount</span><span>−₹{discount.toLocaleString("en-IN")}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-gray-500">
+            <span>Convenience Fee</span>
+            {convenienceFee === 0 ? (
+              <span className="text-emerald-600 text-xs font-bold">FREE</span>
+            ) : (
+              <span>₹{convenienceFee}</span>
+            )}
+          </div>
+          <div className="flex justify-between font-bold text-gray-900 pt-2 border-t border-gray-100 text-base">
+            <span>Total</span><span>₹{total.toLocaleString("en-IN")}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop CTA */}
+      <div className="hidden md:block">
+        {step < 4 ? (
+          <Button
+            onClick={() => setStep(step + 1)}
+            disabled={!canProceed()}
+            className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white py-5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
+          >
+            Continue <ChevronRight size={16} />
+          </Button>
+        ) : (
+          <Button
+            onClick={handleConfirmBooking}
+            disabled={submitting}
+            className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white py-5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
+          >
+            {submitting
+              ? <><Loader2 size={16} className="animate-spin" /> Confirming…</>
+              : <>Confirm Booking · ₹{total.toLocaleString("en-IN")}</>}
+          </Button>
+        )}
+      </div>
+
+      {selectedDate && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-2 text-sm text-gray-600">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Booking Details</p>
+          <div className="flex items-center gap-2">
+            <Calendar size={13} className="text-[#e5849c]" />
+            <span>{selectedDate}{selectedTime ? ` at ${selectedTime}` : ''}</span>
+          </div>
+          {(selectedAddressId || newAddrFull) && (
+            <div className="flex items-start gap-2">
+              <MapPin size={13} className="text-[#e5849c] mt-0.5" />
+              <span className="text-xs leading-snug">
+                {selectedAddressId
+                  ? savedAddresses.find((a: any) => a.id === selectedAddressId)?.address ?? "Saved address"
+                  : newAddrFull}
+              </span>
+            </div>
+          )}
+          {paymentMethod && (
+            <div className="flex items-center gap-2">
+              <CreditCard size={13} className="text-[#e5849c]" />
+              <span>{PAYMENT_OPTIONS.find((p) => p.id === paymentMethod)?.label}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3">
+      <div className="sticky top-0 z-40 bg-white border-b border-gray-100 px-4 md:px-8 py-4 flex items-center gap-3">
         <button
           onClick={() => step > 1 ? setStep(step - 1) : router.back()}
           className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
@@ -639,7 +775,7 @@ function CheckoutPage() {
         </button>
         <div>
           <h1 className="font-bold text-base text-gray-900">Checkout</h1>
-          <p className="text-xs text-gray-400">{STEPS[step - 1]}</p>
+          <p className="text-xs text-gray-400">Step {step} of {STEPS.length} — {STEPS[step - 1]}</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5 text-xs text-gray-500">
           <ShoppingBag size={14} className="text-[#e5849c]" />
@@ -647,36 +783,46 @@ function CheckoutPage() {
         </div>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 py-6 pb-36">
-        <StepDots current={step} total={STEPS.length} />
+      <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 pb-36 md:pb-12">
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
 
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 mb-6">
-          <h2 className="font-bold text-gray-900 mb-5">{STEPS[step - 1]}</h2>
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-          {step === 4 && renderStep4()}
+          {/* Left — form */}
+          <div className="w-full md:flex-1 min-w-0">
+            <StepDots current={step} total={STEPS.length} />
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 mb-6">
+              <h2 className="font-bold text-gray-900 mb-5">{STEPS[step - 1]}</h2>
+              {step === 1 && renderStep1()}
+              {step === 2 && renderStep2()}
+              {step === 3 && renderStep3()}
+              {step === 4 && renderStep4()}
+            </div>
+          </div>
+
+          {/* Right — order summary (desktop only) */}
+          <div className="hidden md:block md:w-[340px] lg:w-[380px] flex-shrink-0 md:sticky md:top-24">
+            {orderSummaryPanel}
+          </div>
         </div>
       </div>
 
-      {/* Fixed bottom CTA */}
-      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur border-t border-gray-100">
+      {/* Mobile fixed bottom CTA */}
+      <div className="md:hidden fixed bottom-16 left-0 right-0 px-4 py-3 bg-white border-t border-gray-100">
         {step < 4 ? (
           <Button
             onClick={() => setStep(step + 1)}
             disabled={!canProceed()}
-            className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white py-6 rounded-2xl font-semibold text-base flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white h-12 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
           >
-            Continue <ChevronRight size={18} />
+            Continue <ChevronRight size={16} />
           </Button>
         ) : (
           <Button
             onClick={handleConfirmBooking}
             disabled={submitting}
-            className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white py-6 rounded-2xl font-semibold text-base flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white h-12 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
           >
             {submitting
-              ? <><Loader2 size={18} className="animate-spin" /> Confirming…</>
+              ? <><Loader2 size={16} className="animate-spin" /> Confirming…</>
               : <>Confirm Booking · ₹{total.toLocaleString("en-IN")}</>}
           </Button>
         )}

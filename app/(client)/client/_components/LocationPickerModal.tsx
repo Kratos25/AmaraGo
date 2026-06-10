@@ -77,7 +77,7 @@ export function LocationPickerModal({ current, onSelect, onClose }: Props) {
   if (notServiceableCity && !waitlistDone) {
     return (
       <div className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center" onClick={onClose}>
-        <div className="bg-white w-full max-w-md rounded-t-3xl md:rounded-3xl p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-white w-full max-w-md rounded-t-3xl md:rounded-3xl p-5 pb-24 md:pb-5" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => { setNotServiceableCity(''); setEmail(''); }} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-5">
             <ArrowLeft size={15} /> Back
           </button>
@@ -119,7 +119,7 @@ export function LocationPickerModal({ current, onSelect, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-md rounded-t-3xl md:rounded-3xl p-5 pb-8 md:pb-5"
+        className="bg-white w-full max-w-md rounded-t-3xl md:rounded-3xl p-5 pb-24 md:pb-5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

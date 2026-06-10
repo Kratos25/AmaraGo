@@ -90,6 +90,7 @@ export default function Home() {
       rawDiscounted: disc,
       rawOriginal:   base,
       imageUrl: s.image_url,
+      description: s.description,
     };
   }, []);
 

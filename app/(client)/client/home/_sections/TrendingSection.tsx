@@ -33,9 +33,11 @@ function TrendingCard({
           <p className={`font-extrabold text-sm leading-snug mb-1.5 ${textColor}`}>
             {service.name}
           </p>
-          <p className={`text-[11px] leading-relaxed mb-2.5 opacity-85 ${textColor}`}>
-            Premium RICA gold wax for full arms. Ideal for sensitive skin — no strips, no pain.
-          </p>
+          {service.description && (
+            <p className={`text-[11px] leading-relaxed mb-2.5 opacity-85 ${textColor}`}>
+              {service.description}
+            </p>
+          )}
           <ul className="space-y-1.5">
             {bullets.map((b) => (
               <li key={b} className={`flex items-center gap-1.5 text-[11px] ${textColor} opacity-90`}>

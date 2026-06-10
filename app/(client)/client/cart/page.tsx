@@ -131,176 +131,212 @@ export default function CartPage() {
     );
   }
 
+  const filteredRecs = recommended.filter((r) => !items.some((i) => i.service_id === r.id)).slice(0, 3);
+
   return (
-    <div className="max-w-lg mx-auto px-4 pt-6 pb-36">
-      <h1 className="text-xl font-bold text-gray-900 mb-6">
+    <div className="max-w-5xl mx-auto px-4 md:px-8 pt-6 pb-36 md:pb-12">
+      <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-6">
         Your Cart{" "}
         <span className="text-gray-400 font-normal text-base ml-1">
           ({itemCount} item{itemCount !== 1 ? "s" : ""})
         </span>
       </h1>
 
-      {/* ── Items ── */}
-      <div className="space-y-3 mb-6">
-        {items.map((item) => (
-          <div key={item.id} className="flex gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#fdf0f3] to-[#fff5f7] rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
-              {item.image_url ? (
-                <img src={item.image_url} alt={item.name} className="w-full h-full object-cover rounded-xl" />
-              ) : (
-                <span className="text-2xl" aria-hidden="true">{getServiceEmoji(item.name)}</span>
-              )}
+      <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
+
+        {/* ── Left: items + recommendations ── */}
+        <div className="w-full md:flex-1 min-w-0">
+          <div className="space-y-3 mb-6">
+            {items.map((item) => (
+              <div key={item.id} className="flex gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div className="w-16 h-16 bg-gradient-to-br from-[#fdf0f3] to-[#fff5f7] rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {item.image_url ? (
+                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover rounded-xl" />
+                  ) : (
+                    <span className="text-2xl" aria-hidden="true">{getServiceEmoji(item.name)}</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm truncate">{item.name}</p>
+                  {item.duration && <p className="text-xs text-gray-400 mt-0.5">{item.duration}</p>}
+                  <p className="text-[#e5849c] font-bold mt-1">₹{item.price.toLocaleString("en-IN")}</p>
+                </div>
+                <div className="flex flex-col items-end justify-between gap-2">
+                  <button
+                    onClick={() => removeItem(item.id)}
+                    className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-500"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                  <div className="flex items-center gap-2 bg-gray-100 rounded-xl px-1 py-1">
+                    <button
+                      onClick={() =>
+                        item.quantity > 1 ? updateItem(item.id, item.quantity - 1) : removeItem(item.id)
+                      }
+                      className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white transition-colors"
+                    >
+                      <Minus size={12} />
+                    </button>
+                    <span className="text-sm font-semibold w-5 text-center">{item.quantity}</span>
+                    <button
+                      onClick={() => updateItem(item.id, item.quantity + 1)}
+                      className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white transition-colors"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Coupon ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Tag size={16} className="text-[#e5849c]" />
+              <span className="text-sm font-semibold text-gray-800">Apply Coupon</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm truncate">{item.name}</p>
-              {item.duration && <p className="text-xs text-gray-400 mt-0.5">{item.duration}</p>}
-              <p className="text-[#e5849c] font-bold mt-1">₹{item.price.toLocaleString("en-IN")}</p>
-            </div>
-            <div className="flex flex-col items-end justify-between gap-2">
-              <button
-                onClick={() => removeItem(item.id)}
-                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-500"
-              >
-                <Trash2 size={15} />
-              </button>
-              <div className="flex items-center gap-2 bg-gray-100 rounded-xl px-1 py-1">
-                <button
-                  onClick={() =>
-                    item.quantity > 1 ? updateItem(item.id, item.quantity - 1) : removeItem(item.id)
-                  }
-                  className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white transition-colors"
-                >
-                  <Minus size={12} />
-                </button>
-                <span className="text-sm font-semibold w-5 text-center">{item.quantity}</span>
-                <button
-                  onClick={() => updateItem(item.id, item.quantity + 1)}
-                  className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white transition-colors"
-                >
-                  <Plus size={12} />
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                <div>
+                  <span className="text-sm font-bold text-green-700">{appliedCoupon}</span>
+                  <p className="text-xs text-green-600 mt-0.5">You save ₹{discount.toLocaleString("en-IN")}</p>
+                </div>
+                <button onClick={handleRemoveCoupon} className="text-xs text-red-500 font-medium hover:underline">
+                  Remove
                 </button>
               </div>
-            </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter coupon code"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === "Enter" && handleApplyCoupon()}
+                  className="uppercase text-sm"
+                />
+                <Button
+                  onClick={handleApplyCoupon}
+                  disabled={validatingCoupon || !couponCode.trim()}
+                  className="bg-[#e5849c] hover:brightness-90 text-white px-5 shrink-0"
+                >
+                  {validatingCoupon ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+                </Button>
+              </div>
+            )}
+            {couponMsg && !appliedCoupon && (
+              <p className={`text-xs mt-2 ${couponMsg.ok ? "text-green-600" : "text-red-500"}`}>
+                {couponMsg.text}
+              </p>
+            )}
           </div>
-        ))}
-      </div>
 
-      {/* ── Coupon ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Tag size={16} className="text-[#e5849c]" />
-          <span className="text-sm font-semibold text-gray-800">Apply Coupon</span>
-        </div>
-        {appliedCoupon ? (
-          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-            <div>
-              <span className="text-sm font-bold text-green-700">{appliedCoupon}</span>
-              <p className="text-xs text-green-600 mt-0.5">You save ₹{discount.toLocaleString("en-IN")}</p>
-            </div>
-            <button onClick={handleRemoveCoupon} className="text-xs text-red-500 font-medium hover:underline">
-              Remove
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <Input
-              placeholder="Enter coupon code"
-              value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === "Enter" && handleApplyCoupon()}
-              className="uppercase text-sm"
-            />
-            <Button
-              onClick={handleApplyCoupon}
-              disabled={validatingCoupon || !couponCode.trim()}
-              className="bg-[#e5849c] hover:brightness-90 text-white px-5 shrink-0"
-            >
-              {validatingCoupon ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
-            </Button>
-          </div>
-        )}
-        {couponMsg && !appliedCoupon && (
-          <p className={`text-xs mt-2 ${couponMsg.ok ? "text-green-600" : "text-red-500"}`}>
-            {couponMsg.text}
-          </p>
-        )}
-      </div>
-
-      {/* ── Price breakdown ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 space-y-3">
-        <h3 className="font-semibold text-gray-800 text-sm">Price Summary</h3>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>Subtotal</span>
-            <span>₹{subtotal.toLocaleString("en-IN")}</span>
-          </div>
-          {discount > 0 && (
-            <div className="flex justify-between text-green-600">
-              <span>Coupon Discount</span>
-              <span>−₹{discount.toLocaleString("en-IN")}</span>
+          {/* ── Recommended (below coupon on mobile, below items on desktop) ── */}
+          {filteredRecs.length > 0 && (
+            <div className="mt-6">
+              <h3 className="font-bold text-sm text-gray-900 mb-3">You might also like</h3>
+              <div className="space-y-2">
+                {filteredRecs.map((svc) => (
+                  <div key={svc.id} className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-gray-100">
+                    <div className="w-11 h-11 rounded-xl bg-[#fdf0f3] flex items-center justify-center text-lg flex-shrink-0 overflow-hidden">
+                      {svc.image_url ? (
+                        <img src={svc.image_url} alt={svc.name} className="w-full h-full object-cover rounded-xl" />
+                      ) : (
+                        <span aria-hidden="true">{getServiceEmoji(svc.name)}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{svc.name}</p>
+                      <p className="text-xs text-[#e5849c] font-bold">
+                        ₹{(svc.discounted_price ?? svc.base_price).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        addItem({
+                          service_id: svc.id,
+                          name: svc.name,
+                          price: svc.discounted_price ?? svc.base_price,
+                          quantity: 1,
+                        })
+                      }
+                      className="text-xs font-semibold text-[#e5849c] border border-[#e5849c]/30 px-3 py-1.5 rounded-xl hover:bg-[#fdf0f3] transition-colors"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          <div className="flex justify-between text-gray-600">
-            <span>Convenience Fee</span>
-            <span>₹{CONVENIENCE_FEE}</span>
+        </div>
+
+        {/* ── Right: price summary + CTA (sticky on desktop) ── */}
+        <div className="hidden md:block md:w-[340px] lg:w-[380px] flex-shrink-0 md:sticky md:top-24">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
+            <h3 className="font-semibold text-gray-800 text-sm">Price Summary</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span>Subtotal ({itemCount} item{itemCount !== 1 ? "s" : ""})</span>
+                <span>₹{subtotal.toLocaleString("en-IN")}</span>
+              </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Coupon Discount</span>
+                  <span>−₹{discount.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-gray-600">
+                <span>Convenience Fee</span>
+                <span>₹{CONVENIENCE_FEE}</span>
+              </div>
+              <div className="flex justify-between font-bold text-gray-900 pt-3 border-t border-gray-100 text-base">
+                <span>Total</span>
+                <span>₹{total.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+            <Button
+              onClick={handleCheckout}
+              className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white h-12 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 mt-2"
+            >
+              Proceed to Checkout <ArrowRight size={16} />
+            </Button>
           </div>
-          <div className="flex justify-between font-bold text-gray-900 pt-2 border-t border-gray-100">
-            <span>Total</span>
-            <span>₹{total.toLocaleString("en-IN")}</span>
+        </div>
+
+        {/* ── Mobile price summary (inline) ── */}
+        <div className="md:hidden w-full bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+          <h3 className="font-semibold text-gray-800 text-sm">Price Summary</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between text-gray-600">
+              <span>Subtotal</span>
+              <span>₹{subtotal.toLocaleString("en-IN")}</span>
+            </div>
+            {discount > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span>Coupon Discount</span>
+                <span>−₹{discount.toLocaleString("en-IN")}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-gray-600">
+              <span>Convenience Fee</span>
+              <span>₹{CONVENIENCE_FEE}</span>
+            </div>
+            <div className="flex justify-between font-bold text-gray-900 pt-2 border-t border-gray-100">
+              <span>Total</span>
+              <span>₹{total.toLocaleString("en-IN")}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── Recommended Services ── */}
-      {recommended.length > 0 && (
-        <div className="mb-6">
-          <h3 className="font-bold text-sm text-gray-900 mb-3">You might also like</h3>
-          <div className="space-y-2">
-            {recommended
-              .filter((r) => !items.some((i) => i.service_id === r.id))
-              .slice(0, 3)
-              .map((svc) => (
-                <div key={svc.id} className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-gray-100">
-                  <div className="w-11 h-11 rounded-xl bg-[#fdf0f3] flex items-center justify-center text-lg flex-shrink-0 overflow-hidden">
-                    {svc.image_url ? (
-                      <img src={svc.image_url} alt={svc.name} className="w-full h-full object-cover rounded-xl" />
-                    ) : (
-                      <span aria-hidden="true">{getServiceEmoji(svc.name)}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{svc.name}</p>
-                    <p className="text-xs text-[#e5849c] font-bold">
-                      ₹{(svc.discounted_price ?? svc.base_price).toLocaleString("en-IN")}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() =>
-                      addItem({
-                        service_id: svc.id,
-                        name: svc.name,
-                        price: svc.discounted_price ?? svc.base_price,
-                        quantity: 1,
-                      })
-                    }
-                    className="text-xs font-semibold text-[#e5849c] border border-[#e5849c]/30 px-3 py-1.5 rounded-xl hover:bg-[#fdf0f3] transition-colors"
-                  >
-                    + Add
-                  </button>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Checkout CTA ── */}
-      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur border-t border-gray-100 md:relative md:bg-transparent md:border-0 md:p-0 md:backdrop-blur-none">
+      {/* ── Mobile fixed bottom CTA ── */}
+      <div className="md:hidden fixed bottom-16 left-0 right-0 px-4 py-3 bg-white border-t border-gray-100">
         <Button
           onClick={handleCheckout}
-          className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white py-6 rounded-2xl font-semibold text-base flex items-center justify-center gap-2"
+          className="w-full bg-gradient-to-r from-[#e5849c] to-[#E5AFBC] hover:brightness-90 text-white h-12 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
         >
-          Proceed to Checkout
-          <ArrowRight size={18} />
+          Checkout · ₹{total.toLocaleString("en-IN")} <ArrowRight size={16} />
         </Button>
       </div>
 
@@ -308,19 +344,15 @@ export default function CartPage() {
       {showLoginPrompt && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl">
-            {/* Header */}
             <div className="bg-[#111827] px-6 py-6 text-center">
               <div className="text-4xl mb-3">🔐</div>
               <h2 className="text-white font-bold text-lg">Login Required</h2>
               <p className="text-white/50 text-sm mt-1">Sign in to proceed with your booking</p>
             </div>
-
-            {/* Body */}
             <div className="p-6 space-y-3">
               <p className="text-sm text-gray-500 text-center">
                 Your cart is saved. Log in and we&apos;ll take you straight to checkout.
               </p>
-
               <Button
                 onClick={() => {
                   setShowLoginPrompt(false);
@@ -330,7 +362,6 @@ export default function CartPage() {
               >
                 Log In
               </Button>
-
               <button
                 onClick={() => setShowLoginPrompt(false)}
                 className="w-full py-3 text-sm text-gray-400 hover:text-gray-600 transition-colors"

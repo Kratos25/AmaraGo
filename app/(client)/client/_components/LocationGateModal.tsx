@@ -72,7 +72,7 @@ export function LocationGateModal() {
 
         {/* ── Screen: Pick location ─────────────────────────────────────── */}
         {screen === 'pick' && (
-          <div className="p-6 pb-8">
+          <div className="p-6 pb-24 md:pb-6">
             <div className="flex items-center gap-1 mb-1">
               <span className="text-[#E91E8C] font-extrabold text-lg">Amara</span>
               <span className="text-[#111827] font-extrabold text-lg">Go</span>
@@ -123,7 +123,7 @@ export function LocationGateModal() {
 
         {/* ── Screen: Not Serviceable ───────────────────────────────────── */}
         {screen === 'not-serviceable' && (
-          <div className="p-6 pb-8">
+          <div className="p-6 pb-24 md:pb-6">
             <button onClick={() => setScreen('pick')} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-5">
               <ArrowLeft size={15} /> Back
             </button>
@@ -152,7 +152,7 @@ export function LocationGateModal() {
 
         {/* ── Screen: Waitlist done ─────────────────────────────────────── */}
         {screen === 'waitlist-done' && (
-          <div className="p-6 pb-8 text-center">
+          <div className="p-6 pb-24 md:pb-6 text-center">
             <CheckCircle2 size={40} className="text-green-500 mx-auto mb-3" />
             <h2 className="text-xl font-bold text-[#111827] mb-1">You&apos;re on the list!</h2>
             <p className="text-sm text-gray-500 mb-5">We&apos;ll notify you when AmaraGo launches in {pendingCity}.</p>

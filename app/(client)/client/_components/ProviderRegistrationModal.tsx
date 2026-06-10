@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Loader2, MapPin, Navigation } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { User } from 'firebase/auth';
-import { authAPI } from '@/lib/api';
+import { authAPI, usersAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface ProviderRegistrationModalProps {
@@ -27,6 +27,44 @@ export function ProviderRegistrationModal({
   const [bio, setBio] = useState('');
   const [experience, setExperience] = useState('');
   const [address, setAddress] = useState('');
+  const [detectingLocation, setDetectingLocation] = useState(false);
+
+  useEffect(() => {
+    usersAPI.getMe()
+      .then(({ data }) => { if (data.phone) setPhone(data.phone); })
+      .catch(() => {});
+  }, []);
+
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      toast({ title: 'Geolocation not supported', variant: 'destructive' });
+      return;
+    }
+    setDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+          );
+          const data = await res.json();
+          if (data.results?.[0]?.formatted_address) {
+            setAddress(data.results[0].formatted_address);
+          }
+        } catch {
+          toast({ title: 'Could not detect address', variant: 'destructive' });
+        } finally {
+          setDetectingLocation(false);
+        }
+      },
+      () => {
+        toast({ title: 'Location access denied', variant: 'destructive' });
+        setDetectingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +91,7 @@ export function ProviderRegistrationModal({
         location: address,
       });
       toast({
-        title: 'Application submitted! 🎉',
+        title: 'Application submitted!',
         description: "We'll verify your request within 24 hours. You'll be notified once approved.",
       });
       onSuccess();
@@ -69,16 +107,7 @@ export function ProviderRegistrationModal({
   };
 
   return (
-    // Overlay
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
-      {/*
-        Sheet container:
-        - On mobile: slides up from bottom, takes up to 85dvh
-          (leaving ~15dvh gap above so the top of the modal is tappable to dismiss).
-          We use `dvh` so the browser's bottom nav bar is already excluded from the
-          viewport height, meaning our modal never slides under it.
-        - On sm+: centered card, max-w-lg, rounded all sides.
-      */}
       <div
         className="
           bg-white w-full rounded-t-3xl sm:rounded-3xl shadow-2xl
@@ -86,7 +115,7 @@ export function ProviderRegistrationModal({
           max-h-[85dvh] sm:max-h-[90vh] sm:max-w-lg
         "
       >
-        {/* ── Header (never scrolls) ─────────────────────────── */}
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <div>
             <h2 className="font-bold text-lg text-gray-900">Become a Provider</h2>
@@ -101,7 +130,7 @@ export function ProviderRegistrationModal({
           </button>
         </div>
 
-        {/* ── Scrollable form body ───────────────────────────── */}
+        {/* Scrollable form body */}
         <div className="overflow-y-auto flex-1 px-6 py-4">
           <form id="provform" onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -131,23 +160,42 @@ export function ProviderRegistrationModal({
 
             <div>
               <Label htmlFor="prov-address" className="text-sm">Service Area / Address *</Label>
-              <Input
-                id="prov-address"
-                placeholder="e.g. Andheri West, Mumbai"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                required
-                className="mt-1.5 h-10 text-sm"
-              />
+              <div className="mt-1.5 space-y-2">
+                <Input
+                  id="prov-address"
+                  placeholder="e.g. Andheri West, Mumbai"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  required
+                  className="h-10 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={detectLocation}
+                  disabled={detectingLocation}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-[#e5849c] hover:text-[#d9708a] transition-colors disabled:opacity-50"
+                >
+                  {detectingLocation ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Navigation size={13} />
+                  )}
+                  {detectingLocation ? 'Detecting...' : 'Use my current location'}
+                </button>
+              </div>
             </div>
 
             <div>
               <Label htmlFor="prov-exp" className="text-sm">Years of Experience</Label>
               <Input
                 id="prov-exp"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={50}
                 placeholder="e.g. 3"
                 value={experience}
-                onChange={(e) => setExperience(e.target.value)}
+                onChange={(e) => setExperience(e.target.value.replace(/\D/g, ''))}
                 className="mt-1.5 h-10 text-sm"
               />
             </div>
@@ -166,15 +214,7 @@ export function ProviderRegistrationModal({
           </form>
         </div>
 
-        {/*
-          ── Sticky footer with submit button ──────────────────
-          KEY FIX: On mobile the bottom nav bar sits on top of the viewport.
-          `dvh` units (used on the modal height above) already account for the
-          browser chrome, but the bottom nav is an *in-app* element rendered
-          outside this modal. We add `pb-safe` (env(safe-area-inset-bottom))
-          plus an extra 64px bottom padding on mobile (`pb-20`) so the button
-          always clears the nav bar. On sm+ screens we reset to normal padding.
-        */}
+        {/* Sticky footer */}
         <div className="px-6 pt-3 pb-20 sm:pb-4 border-t border-gray-100 flex-shrink-0 bg-white">
           <Button
             type="submit"

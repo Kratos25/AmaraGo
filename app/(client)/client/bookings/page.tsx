@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, ArrowUpDown } from 'lucide-react';
-import { bookingsAPI, type Booking as APIBooking } from '@/lib/api';
+import { bookingsAPI, servicesAPI, type Booking as APIBooking } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { BookingListSkeleton } from '@/components/ui/skeletons';
 
@@ -30,11 +30,21 @@ export default function BookingsPage() {
   const [loading,     setLoading]     = useState(true);
   const [ratingModal, setRatingModal] = useState<{ id: string; service: string; expert: string } | null>(null);
   const [editModal,   setEditModal]   = useState<Booking | null>(null);
+  const [serviceImages, setServiceImages] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    bookingsAPI
-      .list()
-      .then(({ data }) => setApiBookings(data.items))
+    Promise.all([
+      bookingsAPI.list(),
+      servicesAPI.list({ active: true }).catch(() => ({ data: [] })),
+    ])
+      .then(([bookingsRes, servicesRes]) => {
+        setApiBookings(bookingsRes.data.items);
+        const imgMap: Record<string, string> = {};
+        servicesRes.data.forEach((s) => {
+          if (s.image_url) imgMap[s.name.toLowerCase()] = s.image_url;
+        });
+        setServiceImages(imgMap);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -47,6 +57,7 @@ export default function BookingsPage() {
     api_status:         b.status,
     provider_id:        b.provider_id,
     service:            b.service_name  ?? 'Service',
+    serviceImage:       serviceImages[(b.service_name ?? '').toLowerCase()],
     expert:             b.provider_name ?? 'Pending Assignment',
     expertRating:       0,
     date:               b.date,
@@ -108,115 +119,136 @@ export default function BookingsPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const cancelledCount = allBookings.filter((b) => b.status === 'cancelled').length;
+
+  const statCards = (
+    <div className="grid grid-cols-3 md:grid-cols-1 gap-2 sm:gap-3">
+      {[
+        { val: String(totalCount).padStart(2, '0'),     label: 'Total',     color: 'text-[#E8708E]', bg: 'bg-[#E8708E]/10', border: 'border-[#E8708E]/30' },
+        { val: String(upcomingCount).padStart(2, '0'),   label: 'Upcoming',  color: 'text-[#E8708E]', bg: 'bg-[#E8708E]/10', border: 'border-[#E8708E]/30' },
+        { val: String(completedCount).padStart(2, '0'),  label: 'Completed', color: 'text-green-600',  bg: 'bg-green-50',     border: 'border-green-200'     },
+        { val: String(cancelledCount).padStart(2, '0'),  label: 'Cancelled', color: 'text-gray-500',   bg: 'bg-gray-50',      border: 'border-gray-200'      },
+      ].map((s) => (
+        <div key={s.label} className={`${s.bg} border ${s.border} rounded-2xl px-3 py-3 md:py-4 text-center md:text-left md:flex md:items-center md:gap-4`}>
+          <p className={`text-xl sm:text-2xl md:text-3xl font-bold ${s.color} leading-none mb-1 md:mb-0`}>{s.val}</p>
+          <p className={`text-[10px] sm:text-xs ${s.color} font-medium opacity-70`}>{s.label}</p>
+        </div>
+      ))}
+    </div>
+  );
+
+  const searchAndTabs = (
+    <>
+      <div className="relative mb-4">
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          type="search"
+          placeholder="Search service or provider…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-white border border-gray-200 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-[#d4537e] shadow-sm transition-colors"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-0 border-b border-gray-200 mb-4 sm:mb-5 overflow-x-auto no-scrollbar">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex-shrink-0 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
+              activeTab === tab.key
+                ? 'border-[#d4537e] text-[#d4537e]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
+  const bookingsList = loading ? (
+    <BookingListSkeleton count={3} />
+  ) : filtered.length === 0 ? (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-white border border-gray-100 flex items-center justify-center text-3xl mb-4 shadow-sm">
+        📋
+      </div>
+      <h3 className="text-base font-semibold text-gray-700 mb-1">No bookings found</h3>
+      <p className="text-sm text-gray-400 mb-6">
+        {search ? 'Try a different search term' : 'Book a service and it will appear here'}
+      </p>
+      <button
+        onClick={() => router.push('/client/services')}
+        className="bg-[#d4537e] hover:bg-[#c0476f] text-white text-sm font-medium px-6 py-2.5 rounded-xl transition-colors"
+      >
+        Explore Services
+      </button>
+    </div>
+  ) : (
+    <div className="space-y-4">
+      {filtered.map((booking) => (
+        <BookingCard
+          key={booking.id}
+          booking={booking}
+          isOpen={expandedId === booking.id}
+          onToggle={() => setExpandedId(expandedId === booking.id ? null : booking.id)}
+          onEdit={setEditModal}
+          onRate={setRatingModal}
+          onCancel={handleCancel}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <>
       <div className="min-h-screen bg-[#fdf6f8]">
-        <div className="max-w-3xl mx-auto px-4 md:px-8 pt-6 md:pt-8 pb-28 md:pb-12">
+        <div className="max-w-6xl mx-auto px-4 md:px-8 pt-6 md:pt-8 pb-28 md:pb-12">
 
-          {/* ── Stat cards ── */}
-          <div className="grid grid-cols-3 gap-3 mb-6 md:mb-8">
-            {[
-              { val: String(totalCount).padStart(2, '0'),                          label: 'Total Bookings'     },
-              { val: String(upcomingCount).padStart(2, '0'),                       label: 'Upcoming Bookings'  },
-              { val: String(completedCount).padStart(2, '0'),                      label: 'Completed Bookings' },
-            ].map((s) => (
-              <div
-                key={s.label}
-                className="w- bg-[#E8708E]/10 border border-[#E8708E] rounded-2xl px-2 py-3 text-center"
-              >
-                <p className="text-2xl font-semibold text-[#E8708E] leading-none mb-1">{s.val}</p>
-                <div className="h-0.5 w-16 border border-[#E8708E]/50 mx-auto mb-1" />
-                <p className="text-base text-[#E8708E]">{s.label}</p>
-              </div>
-            ))}
+          <h1 className="text-xl md:text-2xl font-semibold text-[#111827] mb-4 md:mb-6">My Bookings</h1>
+
+          {/* ── Mobile layout: stacked ── */}
+          <div className="md:hidden">
+            {statCards}
+            <div className="mt-5">
+              {searchAndTabs}
+              {bookingsList}
+            </div>
           </div>
 
-          {/* ── Title ── */}
-          <h1 className="text-2xl font-semibold text-[#111827] mb-5">My Bookings</h1>
+          {/* ── Desktop layout: sidebar + main ── */}
+          <div className="hidden md:flex gap-8 items-start">
 
-          {/* ── Search ── */}
-          <div className="relative mb-5">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            <input
-              type="search"
-              placeholder="Search service or provider…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-white border border-gray-200 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-[#d4537e] shadow-sm transition-colors"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
+            {/* Left sidebar — stats + quick filter */}
+            <div className="w-[220px] lg:w-[260px] flex-shrink-0 sticky top-24 space-y-5">
+              {statCards}
 
-          {/* ── Tabs + sort ── */}
-          <div className="flex items-center justify-between border-b border-gray-200 mb-5">
-            <div className="flex">
-              {TABS.map((tab) => (
+              <div className="bg-white rounded-2xl border border-gray-100 p-4">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Quick Actions</p>
                 <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === tab.key
-                      ? 'border-[#d4537e] text-[#d4537e]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
+                  onClick={() => router.push('/client/services')}
+                  className="w-full text-sm font-semibold text-[#e5849c] border border-[#e5849c]/30 py-2.5 rounded-xl hover:bg-[#fdf0f3] transition-colors"
                 >
-                  {tab.label}
+                  + Book a Service
                 </button>
-              ))}
+              </div>
             </div>
-            <button className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 pb-2 transition-colors">
-              <ArrowUpDown size={14} /> Sort by
-            </button>
+
+            {/* Right — search, tabs, cards */}
+            <div className="flex-1 min-w-0">
+              {searchAndTabs}
+              {bookingsList}
+            </div>
           </div>
-
-          {/* ── Cards ── */}
-          {loading ? (
-            <BookingListSkeleton count={3} />
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-white border border-gray-100 flex items-center justify-center text-3xl mb-4 shadow-sm">
-                📋
-              </div>
-              <h3 className="text-base font-semibold text-gray-700 mb-1">No bookings found</h3>
-              <p className="text-sm text-gray-400 mb-6">
-                {search ? 'Try a different search term' : 'Book a service and it will appear here'}
-              </p>
-              <button
-                onClick={() => router.push('/client/services')}
-                className="bg-[#d4537e] hover:bg-[#c0476f] text-white text-sm font-medium px-6 py-2.5 rounded-xl transition-colors"
-              >
-                Explore Services
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filtered.map((booking) => (
-                <BookingCard
-                  key={booking.id}
-                  booking={booking}
-                  isOpen={expandedId === booking.id}
-                  onToggle={() => setExpandedId(expandedId === booking.id ? null : booking.id)}
-                  onEdit={setEditModal}
-                  onRate={setRatingModal}
-                  onCancel={handleCancel}
-                />
-              ))}
-
-              {/* Load more */}
-              <div className="text-center pt-4">
-                <button className="text-sm font-medium text-[#E8708E] hover:text-[#E8708E]/90 underline underline-offset-2 transition-colors">
-                  Load More
-                </button>
-              </div>
-            </div>
-          )}
 
         </div>
       </div>
